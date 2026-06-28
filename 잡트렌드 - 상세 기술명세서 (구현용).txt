@@ -1,0 +1,500 @@
+잡트렌드 (JobTrend) — 기술명세서 v1.0
+1. 프로젝트 개요
+한 줄 소개: 지금 어떤 공고가 있는지, 직무별로 어떤 자격요건과 트렌드가 필요한지 보여주고, 원하는 키워드를 등록하면 알람·데일리 리포트로 받아볼 수 있으며, AI 모의면접까지 지원하는 구직자용 채용 인텔리전스 서비스.
+해결하려는 문제
+
+정보 비대칭 — 기업은 ATS로 지원자를 정교하게 거르지만, 구직자는 "이 직무에 합격하려면 어떤 자격요건이 필요한지" 사전에 파악할 도구가 거의 없음
+기회 누락 — 채용이 줄어든 시장에서 본인 스킬셋이 통하는 인접 직무를 놓치고 한 직무에만 집중하는 경우가 많음
+면접 준비 비대칭 — AI 면접질문 추천은 기업용으로는 상용화됐지만, 구직자가 직접 쓸 수 있는 도구는 비어 있음
+
+핵심 가치 제안
+영역제공 가치트렌드 파악직무별 자격요건·기술스택 키워드를 실제 공고 데이터로 통계화알림·구독키워드 등록 시 신규 공고 알림 + 매일 트렌드 변화 리포트 발송기회 확장자격요건이 겹치는 인접 직무 자동 추천면접 준비JD+이력서 기반 AI 예상질문 생성, 모의면접·피드백
+시장조사 요약: 기업의 65.7~73.4%가 2026년 정규직 채용 계획 있음. 신규채용 시급 직군은 제조·현장·기능직(44.8%), 연구개발(34.2%). 수시채용만 하는 기업 70.8%, 직무중심 채용 강화가 주요 트렌드(72.2%). 중고신입 선호 강화(33.5%, HR이슈 1위), 4~7년차 경력직 선호(49.7%). 평가 시 "직무 관련 업무 경험"이 가장 중요(67.6%).
+경쟁 서비스 비교
+
+나인하이어/라운드HR: 기업(채용담당자) 대상, 스크리닝 자동화
+합격닷컴/AI ResumeMaker: 개인 대상, 1:1 자소서 첨삭(수동)
+잡트렌드(본 서비스): 개인 대상, 트렌드 파악+알림 구독+모의면접 통합, 구독+크레딧 과금
+
+UX 페르소나 3종
+
+김신입(26세, 취준생) — 합격 기준 사전 파악 필요
+박전환(31세, 이직준비) — 인접 직무 탐색 필요
+이재직(29세, 면접 D-3) — 실전 모의면접 연습 필요
+
+
+2. 핵심 기능 (4종, 모두 v1.0 MVP 범위)
+F1. 채용 트렌드 & 자격요건 분석 대시보드
+
+직무명 입력 → 사람인·잡코리아 API로 공고 수집 → 경력수준 분포, 학력요건 분포, 키워드 Top15, 최근 30일 공고 수 추이 제공. 최우선 기능 (다른 3개의 데이터 기반).
+F2. 키워드 알람 & 데일리 리포트 구독
+
+관심 키워드(직무명·기술스택·지역·연차, 무료 최대 5개) 등록 → 신규 공고 알림 + 전일 대비 트렌드 변화 데일리 다이제스트. F1 데이터 재사용.
+F3. 인접 직무 추천
+
+관심 직무 입력 → 자격요건 키워드 유사도 상위 3~5개 인접 직무 + 겹치는 핵심 스킬(추천 근거) 제공. F1의 키워드 집계 결과에 코사인 유사도 계산만 추가.
+F4. AI 모의면접 시뮬레이터
+
+JD+이력서 입력 → Claude API가 예상 질문 5~7개 생성, 텍스트 모의면접 진행, 답변 피드백. 무료→유료 전환의 핵심 — 무료 크레딧(월 2~3회) 소진 후 충전 유도.
+기능 간 관계: F1→F2(신규/변화 감지), F1→F3(유사도 계산 입력), F1→F4(질문 생성 맥락)
+
+3. 화면 구성
+화면기능구성요소온보딩/직무 검색공통검색창, 인기 직무 태그트렌드 대시보드F1분포 차트, 워드클라우드, 추이 그래프키워드 알람 설정F2등록 폼, 채널 선택데일리 리포트함F2날짜별 리포트, 변화 하이라이트인접 직무 추천F3추천 카드(유사도%, 스킬 태그)AI 모의면접F4입력 폼, 채팅형 UI, 피드백마이페이지공통키워드 관리, 크레딧 현황, 결제
+4. 사용자 흐름
+가입 → 직무 검색(F1) → 키워드 등록(F2) → (선택) 인접 직무 확인(F3) → 데일리 리포트 수신 → JD 입력 후 모의면접(F4) → 크레딧 소진 시 결제
+전환 설계: F1·F2·F3는 무료 개방(가입·재방문 유도), F4가 실제 매출 발생 지점.
+
+5. 시스템 구조
+4개 기능 모두 동일한 4-agent 파이프라인(Collector→Analyzer→Insight→Report) 공유.
+계층구성ClientReact+Vite, Vercel 정적 배포API LayerVercel Serverless FunctionsExternal APIs사람인 API, 잡코리아 API, Claude APIDatabaseNeon DB (Serverless PostgreSQL)SchedulerVercel Cron (1일 1회 Collector 배치)
+기능별 매핑
+
+F1: 공고 수집 → 필드 집계 → 패턴 도출 → 차트 렌더링
+F2: 신규 공고 수집(F1 재사용) → 키워드 매칭 → 변화 감지 → 알림 발송
+F3: F1 집계 재사용 → 코사인 유사도 계산 → 상위 N개 선정 → 추천 카드 표시
+F4: JD/이력서 입력 → Claude API 질문 생성 → 답변 평가 → 피드백 생성
+
+
+6. 기술 스택
+
+Frontend: React + Vite
+Backend: Vercel Serverless Functions
+DB: Neon DB (PandaRank/PlayBoard와 동일 스택 재사용)
+LLM API: Claude API
+Open API: 사람인 + 잡코리아
+배포: Vercel / 스케줄러: Vercel Cron
+
+7. 사용 API
+
+사람인 API: 이용신청 승인 필요, 1일 최대 500회. 직무·지역·경력·학력·연봉코드·키워드 제공
+잡코리아 API: 신청서 검토 후 승인, 사용목적 불분명 시 거절 가능(승인 지연 리스크)
+Claude API: F4 질문생성·피드백, F1 트렌드 요약 보조
+
+→ 두 채용 API 모두 합격자 개인 데이터는 제공 안 함 — 이미 "공고 자격요건 트렌드"로 범위 조정 반영됨.
+AI 에이전트 활용: Claude(기획·BMC·페르소나), Perplexity(트렌드 검색), Claude Code(구현), Claude API(서비스 내재 LLM) — 필수조건(AI 에이전트 2종+, 코딩에이전트 1종+, LLM API 1종+, Open API 1종+) 모두 충족.
+
+8. 데이터 저장 방식 (Neon DB, 8개 테이블)
+users / job_postings / job_category_stats / job_similarity / keyword_alerts / daily_reports / interview_sessions / credit_transactions
+9. 배포 전략
+Vercel(프론트+서버리스, GitHub 연동) + Neon DB(서버리스). 1차 배포는 F1 우선, 2차는 팀 리뷰 TOP3 반영. 잡코리아 승인 지연 시 사람인 단독+목데이터로 1차 시연.
+
+10. 턴 운영 계획 (4~5인, 1인당 15~20분)
+
+아이디어·시장조사(완료) → 2. 기술명세서(본 문서) → 3. F1 핵심 구현 → 4. F2~F4 순차 연결+UI → 5. 발표자료·문서 정리
+
+원칙: F1을 반드시 동작시킨 뒤 F2→F3→F4 순으로 연결. F4는 독립 구현 가능해 시간 부족 시 마지막 배치 가능.
+11. 리스크
+
+잡코리아 승인 지연 → 사람인 우선+목데이터 대응
+합격자 데이터 부재 → 트렌드 분석으로 범위 조정(반영됨)
+턴 시간 제약 → F1 최소 동작 우선
+API 호출량 제한 → Cron 배치+DB 캐싱
+
+12. 평가 기준 매핑 (100점)
+문제정의10·시장조사15·AI에이전트15·API활용15·기능구현20·UI/UX10·문서화5·발표10 — 각 항목이 위 섹션들과 1:1 대응.
+13. 향후 발전 방향
+스펙 갭 분석, 트렌드 스파이크 감지, 알림 채널 다양화(카카오톡), 그룹 구독, 모의면접 음성 모드, 잡플래닛 연동.
+
+내용 복사해서 바로 쓰시면 됩니다. 혹시 다운로드가 안 되는 게 특정 파일 형식 때문인지, 아니면 다운로드 버튼 자체가 안 눌리는 건지 알려주시면 그 부분도 같이 봐드릴게요.입력 내용: 너무 간단한거 같은 데, 난 프로젝트에서 100점을 받고 싶어.너무 간단한거 같은 데, 난 프로젝트에서 100점을 받고 싶어. 그리고 기술명세서 토대로 코드를 짜야하는 데 너무 간단한거 같아. 좀더 자세히 써줘. 그리고 api 매핑은 마지막에 할거야.오후 7:41Claude 응답: 알겠습니다, 글로 풀어서 코드 짤 수 있는 수준까지 자세하게 갈게요.상세 기술명세서 작성 계획 수립했음상세 기술명세서 작성 계획 수립했음알겠습니다, 글로 풀어서 코드 짤 수 있는 수준까지 자세하게 갈게요. API 필드 매핑은 마지막으로 미루고, 그 대신 내부 아키텍처, DB 스키마(실제 SQL), API 명세, 알고리즘 로직, 프론트 컴포넌트 구조, 가격 정책까지 구체적으로 정리합니다.
+
+잡트렌드 — 상세 기술명세서 (구현용)
+0. 범위 메모
+사람인/잡코리아 실제 필드명 매핑은 API 승인 후 마지막에 진행. 여기서는 일반적인 채용공고 데이터 모델(직무, 경력, 학력, 키워드)을 기준으로 내부 스키마·로직을 먼저 확정하고, 승인 후 외부 응답 필드를 이 모델에 매핑만 하면 되는 구조로 설계함.
+
+1. 코드 폴더 구조
+jobtrend/
+├── frontend/                      # React + Vite
+│   └── src/
+│       ├── pages/
+│       │   ├── OnboardingPage.jsx
+│       │   ├── TrendDashboardPage.jsx       (F1)
+│       │   ├── AlertSettingsPage.jsx        (F2)
+│       │   ├── ReportInboxPage.jsx          (F2)
+│       │   ├── AdjacentJobsPage.jsx         (F3)
+│       │   ├── InterviewPage.jsx            (F4)
+│       │   ├── InterviewSessionPage.jsx     (F4)
+│       │   └── MyPage.jsx
+│       ├── components/
+│       │   ├── common/ (Header, Nav, Card, Modal, Toast, LoadingSpinner, EmptyState)
+│       │   └── feature/ (TrendChart, KeywordCloud, JobRecommendCard, ChatBubble, CreditMeter, AlertForm)
+│       ├── hooks/ (useAuth, useTrendData, useAlerts, useInterviewSession, useCredits)
+│       ├── api/ (client.js, endpoints.js)
+│       ├── context/ (AuthContext.jsx, CreditContext.jsx)
+│       └── App.jsx, router.jsx, main.jsx
+├── api/                           # Vercel Serverless Functions
+│   ├── trends/[jobCategory].js
+│   ├── alerts/index.js
+│   ├── alerts/[id].js
+│   ├── reports/daily.js
+│   ├── adjacent-jobs/[jobCategory].js
+│   ├── interview/start.js
+│   ├── interview/answer.js
+│   ├── interview/[sessionId]/summary.js
+│   ├── credits/balance.js
+│   ├── credits/charge.js
+│   ├── cron/collect-postings.js
+│   ├── cron/compute-similarity.js
+│   └── lib/ (db.js, claude.js, similarity.js, keywordExtractor.js, auth.js)
+└── db/
+    ├── schema.sql
+    └── migrations/
+
+2. 프론트 라우팅 테이블
+Path페이지인증/온보딩/직무 검색X/trends/:jobCategory트렌드 대시보드 (F1)X/alerts키워드 알람 설정 (F2)O/reports데일리 리포트함 (F2)O/adjacent/:jobCategory인접 직무 추천 (F3)X/interview모의면접 시작 (F4)O/interview/:sessionId모의면접 진행 (F4)O/mypage마이페이지O
+
+3. 내부 REST API 명세 (자체 백엔드)
+GET /api/trends/:jobCategory?period=30d
+응답:
+json{
+  "jobCategory": "백엔드 개발자",
+  "totalPostings": 214,
+  "experienceDistribution": [{"range":"신입","count":42,"pct":19.6}, ...],
+  "educationDistribution": [{"level":"학력무관","count":110,"pct":51.4}, ...],
+  "topKeywords": [{"keyword":"Python","frequency":98,"pct":45.8}, ...최대15개],
+  "postingTrend": [{"date":"2026-06-01","count":7}, ...30일],
+  "lastUpdated": "2026-06-27T01:00:00Z"
+}
+에러: 400 잘못된 직무명 / 404 아직 수집된 데이터 없음(→ "수집 요청하기" CTA로 연결) / 500
+POST /api/alerts (인증 필요)
+요청: { "keyword": "AWS", "jobCategory": "백엔드 개발자", "region": "서울", "channel": "email" }
+
+무료 플랜은 5개 초과 시 403 + { "reason": "FREE_LIMIT_EXCEEDED" } 반환 → 프론트에서 업그레이드 모달 표시
+GET /api/alerts · DELETE /api/alerts/:id
+GET /api/reports/daily?date=YYYY-MM-DD
+응답: { "date": "...", "highlights": [{"keyword":"AWS","changeType":"frequency_spike","delta":"+32%"}], "newPostings": [...] }
+GET /api/adjacent-jobs/:jobCategory
+응답: { "sourceJob":"마케팅 기획", "recommendations":[{"jobCategory":"그로스마케터","similarityScore":0.81,"sharedKeywords":["GA4","SQL","A/B테스트"]}, ...] }
+POST /api/interview/start (인증 필요, 크레딧 1개 차감)
+요청: { "jdText": "...", "resumeText": "..." }
+
+응답: { "sessionId": "...", "questions":[{"id":1,"text":"...","order":1}, ...5~7개], "creditsRemaining": 2 }
+
+에러: 크레딧 0개면 402 Payment Required + 결제 유도 정보
+POST /api/interview/answer
+요청: { "sessionId":"...", "questionId":1, "answerText":"..." }
+
+응답: { "feedback":{"strengths":["..."],"improvements":["..."]}, "nextQuestionId": 2 }
+GET /api/interview/:sessionId/summary — 전체 종합 피드백
+GET /api/credits/balance · POST /api/credits/charge
+POST /api/cron/collect-postings — Vercel Cron 전용, x-vercel-cron-secret 헤더로 보호, 외부 미공개
+
+4. DB 스키마 (Neon DB, 실제 DDL)
+sqlCREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255),
+  plan_tier VARCHAR(20) NOT NULL DEFAULT 'free',
+  interview_credits INT NOT NULL DEFAULT 3,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE job_postings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source VARCHAR(20) NOT NULL,              -- 'saramin' | 'jobkorea'
+  external_id VARCHAR(100) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  company VARCHAR(255),
+  job_category VARCHAR(100) NOT NULL,
+  region VARCHAR(100),
+  employment_type VARCHAR(50),
+  experience_min INT,
+  experience_max INT,
+  education_level VARCHAR(50),
+  salary_code VARCHAR(50),
+  keywords TEXT[],
+  raw_requirements TEXT,
+  posting_url TEXT,
+  posted_at DATE,
+  collected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(source, external_id)
+);
+CREATE INDEX idx_postings_category ON job_postings(job_category);
+CREATE INDEX idx_postings_collected ON job_postings(collected_at);
+
+CREATE TABLE job_category_stats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_category VARCHAR(100) NOT NULL,
+  keyword VARCHAR(100) NOT NULL,
+  frequency INT NOT NULL DEFAULT 0,
+  period_date DATE NOT NULL,
+  UNIQUE(job_category, keyword, period_date)
+);
+CREATE INDEX idx_stats_category_date ON job_category_stats(job_category, period_date);
+
+CREATE TABLE job_similarity (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_category_a VARCHAR(100) NOT NULL,
+  job_category_b VARCHAR(100) NOT NULL,
+  similarity_score NUMERIC(5,4) NOT NULL,
+  shared_keywords TEXT[],
+  computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(job_category_a, job_category_b)
+);
+
+CREATE TABLE keyword_alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  keyword VARCHAR(100) NOT NULL,
+  job_category VARCHAR(100),
+  region VARCHAR(100),
+  channel VARCHAR(20) NOT NULL DEFAULT 'email',
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_alerts_user ON keyword_alerts(user_id);
+
+CREATE TABLE daily_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  report_date DATE NOT NULL,
+  content_json JSONB NOT NULL,
+  sent_at TIMESTAMPTZ,
+  UNIQUE(user_id, report_date)
+);
+
+CREATE TABLE interview_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  job_category VARCHAR(100),
+  jd_text TEXT NOT NULL,
+  resume_text TEXT,
+  questions_json JSONB NOT NULL,
+  answers_json JSONB DEFAULT '[]',
+  feedback_json JSONB,
+  status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(20) NOT NULL,                -- 'charge' | 'consume' | 'monthly_grant'
+  amount INT NOT NULL,
+  balance_after INT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+5. 핵심 알고리즘 로직 (의사코드 수준)
+F1 — 키워드 추출
+
+raw_requirements 텍스트를 사전 정의 기술스택 딕셔너리(Python/Java/AWS/React/SQL 등 약 150~200개)와 매칭
+경력수준은 experience_min/max를 4구간(신입/1-3년/3-5년/5년+)으로 버킷화
+매일 배치로 job_category_stats에 (job_category, keyword, frequency, period_date=오늘) UPSERT
+percentage = frequency / 해당일 총 공고수 * 100
+Top 15는 frequency DESC LIMIT 15
+
+F2 — 변화 감지
+
+Cron이 오늘자 통계를 만든 뒤 어제자와 비교: delta% = (today.freq - yesterday.freq) / yesterday.freq * 100
+|delta%| >= 20이면 frequency_spike/frequency_drop으로 하이라이트
+사용자 keyword_alerts와 매칭되는 collected_at = 오늘인 신규 공고는 new_posting으로 별도 포함
+결과를 daily_reports.content_json에 저장 후 이메일 발송
+
+F3 — 인접 직무 추천 (코사인 유사도)
+
+직무별 키워드 벡터 구성: vector[keyword] = frequency (최신 period_date 기준)
+두 직무 A, B의 유사도 = (A·B) / (|A| × |B|)
+전체 직무 쌍에 대해 주 1회 배치 계산 → job_similarity 갱신
+조회 시 WHERE job_category_a = A ORDER BY similarity_score DESC LIMIT 5
+shared_keywords는 두 벡터 모두 frequency>0인 키워드 상위 5개
+
+F4 — AI 모의면접 (Claude API 프롬프트 설계)
+
+System prompt: "당신은 채용 면접관입니다. 주어진 JD와 이력서를 바탕으로 실제 면접에서 나올 가능성이 높은 질문 5~7개를 생성하세요. 직무역량/경험/상황대응을 균형 있게 포함하고 JSON 배열로만 응답하세요."
+User prompt: JD: {jdText}\n이력서: {resumeText 또는 '미제공'}
+답변 평가 prompt: "지원자 답변을 구체성·직무연관성·논리성 기준으로 평가하여 강점 2개, 보완점 2개를 제시하세요."
+세션 상태: questions_generated → answering(0..n) → completed
+크레딧 차감: /interview/start 호출 시점(질문 생성 API 호출과 동시)에 1크레딧 차감
+
+
+6. 가격/크레딧 정책 (실제 수치)
+항목내용가입 시 무료 크레딧3회매월 자동 충전(무료 플랜)2회 (리텐션 유도)5회 충전권4,900원10회 충전권8,900원 (단가 할인)무제한 모의면접 월구독9,900원/월키워드 알람 무료 한도5개프리미엄(월 4,900원)알람 20개 + 카카오 알림톡 채널
+1크레딧 = 모의면접 세션 1회(질문생성 + 답변 5~7개 + 종합피드백).
+
+7. 프론트 컴포넌트 트리
+App
+ └─ AuthProvider
+     └─ Router
+         ├─ OnboardingPage (JobSearchInput, PopularJobTags)
+         ├─ TrendDashboardPage (ExperienceDistChart, EducationDistChart, KeywordCloud, PostingTrendLineChart)
+         ├─ AlertSettingsPage (KeywordForm, AlertList)
+         ├─ ReportInboxPage (ReportCard × N)
+         ├─ AdjacentJobsPage (JobRecommendCard × N)
+         ├─ InterviewPage (JDInputForm) → InterviewSessionPage
+         ├─ InterviewSessionPage (ChatBubbleList, AnswerInput, FeedbackPanel)
+         └─ MyPage (CreditMeter, AlertManageList, BillingHistory)
+상태관리: 전역은 Context(AuthContext, CreditContext), 서버 데이터는 화면별 useEffect+useState 또는 시간 여유 있으면 React Query(캐싱·리페치 자동화) 도입.
+인증: 자체 JWT + users 테이블 기반 (이메일/비번 또는 카카오 소셜로그인).
+
+8. 환경변수
+DATABASE_URL=
+ANTHROPIC_API_KEY=
+SARAMIN_API_KEY=        # 승인 후
+JOBKOREA_API_KEY=       # 승인 후
+JWT_SECRET=
+CRON_SECRET=
+EMAIL_API_KEY=          # Resend 등
+
+9. 에러/엣지케이스 처리
+상황처리외부 API 호출 실패마지막 성공 수집 데이터로 fallback + "데이터 갱신 지연 중" 배너Claude API 타임아웃1회 재시도 → 실패 시 크레딧 차감 취소 + 에러 토스트검색한 직무 데이터 없음"아직 수집되지 않은 직무입니다" + 수집 요청 CTA알람 5개 초과 시도403 + 업그레이드 유도 모달크레딧 0개로 모의면접 시도402 + 결제 모달잡코리아 미승인 상태source=saramin으로 자동 필터, UI는 동일하게 동작
+
+10. 100점을 위한 체크포인트 (평가기준 매핑 + 시연 전략)
+평가항목배점시연 시 보여줄 것문제정의·아이디어10"기업은 거르는 도구가 많은데 구직자는 없다" 대비 서사로 오프닝시장조사·기획151.4~1.6 데이터 인용하며 페르소나 1명 시나리오로 스토리텔링AI 에이전트 활용15Claude로 기획, Claude Code로 구현했던 과정 스크린샷/로그 캡처해두기API 활용15F1 대시보드 실데이터로 시연 (mock이라도 "이런 구조"라고 명시)핵심기능 구현20F1은 반드시 완전 동작 + F4(모의면접) 1턴이라도 실제 Claude 응답으로 시연UI/UX10로딩 상태·빈 상태·에러 토스트까지 보여주면 완성도 인상 강함문서화5GitHub README에 이 명세서 요약 + 아키텍처 다이어그램 캡처발표·데모10문제→기능→아키텍처→데모→회고 순서, 5~7분 안에 끝내는 리허설 필수
+팁: 평가자는 "동작하는 것"과 "왜 이렇게 설계했는지 설명할 수 있는 것"을 같이 봐요. F1~F3는 "왜 합격자 스펙이 아니라 트렌드로 갔는지"를 설명하면 기획 깊이를 보여줄 수 있고, F4는 "왜 무료→유료 전환 지점으로 설계했는지"를 설명하면 비즈니스 이해도를 보여줄 수 있어요.
+
+부록: API 필드 매핑 (실데이터 기준)
+1. 사람인 API — 실제 응답 구조 (확인됨)
+json{
+  "jobs": {
+    "count": 2, "start": 1, "total": "7629",
+    "job": [{
+      "url": "http://www.saramin.co.kr/...",
+      "active": 1,
+      "company": { "detail": { "name": "(주)사람인", "href": "..." } },
+      "position": {
+        "title": "백엔드 개발자 채용",
+        "industry": { "code": "301", "name": "솔루션·SI·ERP·CRM" },
+        "location": { "code": "101050", "name": "서울 > 관악구" },
+        "job-type": { "code": "1", "name": "정규직" },
+        "job-mid-code": { "code": "22", "name": "개발·데이터" },
+        "job-code": { "code": "2323", "name": "백엔드개발자" },
+        "experience-level": { "code": 2, "min": 2, "max": 3, "name": "경력 2~3년" },
+        "required-education-level": { "code": "0", "name": "학력무관" }
+      },
+      "keyword": "Python,AWS,Spring,SQL",
+      "salary": { "code": "6", "name": "회사내규에 따름" }
+    }]
+  }
+}
+매핑 테이블
+사람인 응답 경로내부 컬럼(job_postings)변환 방식job.urlposting_url그대로job.active(필터용)1이 아니면 수집 제외job.company.detail.namecompany그대로job.position.titletitle그대로job.position["job-mid-code"].namejob_category직무 대분류 (대시보드 검색 단위)job.position["job-code"].namejob_category_detail세부 직무 (선택 컬럼 추가 가능)job.position.location.nameregion> 기준 앞부분만 추출(예: "서울")job.position["job-type"].nameemployment_type그대로job.position["experience-level"].min/maxexperience_min/experience_max그대로(정수)job.position["required-education-level"].nameeducation_level그대로job.keywordkeywords[]쉼표(,) 기준 splitjob.salary.codesalary_code코드값 그대로 저장, 화면엔 코드표로 변환
+정규화(Normalizer) 코드
+javascript// api/lib/normalizers.js
+function normalizeSaraminJob(job) {
+  return {
+    source: 'saramin',
+    external_id: extractIdFromUrl(job.url),       // url의 rec_idx 파라미터 추출
+    title: job.position.title,
+    company: job.company?.detail?.name ?? null,
+    job_category: job.position['job-mid-code']?.name ?? null,
+    job_category_detail: job.position['job-code']?.name ?? null,
+    region: (job.position.location?.name ?? '').split('>')[0].trim(),
+    employment_type: job.position['job-type']?.name ?? null,
+    experience_min: job.position['experience-level']?.min ?? null,
+    experience_max: job.position['experience-level']?.max ?? null,
+    education_level: job.position['required-education-level']?.name ?? null,
+    salary_code: job.salary?.code ?? null,
+    keywords: (job.keyword ?? '').split(',').map(k => k.trim()).filter(Boolean),
+    posting_url: job.url,
+    raw_requirements: job.keyword ?? '',
+  };
+}
+
+function extractIdFromUrl(url) {
+  const m = url.match(/rec_idx=(\d+)/);
+  return m ? m[1] : url;
+}
+
+module.exports = { normalizeSaraminJob, extractIdFromUrl };
+호출 코드
+javascript// api/cron/collect-postings.js (사람인 부분)
+async function fetchSaraminJobs(jobMidCode, page = 1) {
+  const url = `https://oapi.saramin.co.kr/job-search?access-key=${process.env.SARAMIN_API_KEY}` +
+              `&job_mid_cd=${jobMidCode}&count=100&start=${(page - 1) * 100 + 1}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const data = await res.json();
+  return data.jobs.job.map(normalizeSaraminJob);
+}
+
+2. 잡코리아 API — 구조 및 매핑 (⚠️ 승인 후 1차 검증 필요)
+잡코리아는 XML 응답이고, 정확한 태그명은 승인 후 발급되는 공식 가이드 문서에서만 확인 가능해요 (공개 검색으로는 "채용기업명·채용정보 제목·직무·산업·근무지역·자격요건·급여정보·상세요강 URL을 포함"한다는 항목 단위 설명까지만 공개되어 있고, 실제 XML 태그명은 비공개입니다). 그래서 국내 채용 XML 피드 업계 표준 관례를 기준으로 예상 구조를 먼저 잡아두고, 승인 후 실제 태그명만 교체하면 되는 구조로 짜드릴게요.
+예상 XML 구조 (업계 관례 기준 추정)
+xml<jobs>
+  <job>
+    <gi_no>123456</gi_no>
+    <co_name>(주)예시기업</co_name>
+    <gi_title>백엔드 개발자 채용</gi_title>
+    <gi_job_cd_nm>개발·데이터</gi_job_cd_nm>
+    <gi_area_nm>서울 강남구</gi_area_nm>
+    <gi_edu_nm>대졸이상</gi_edu_nm>
+    <gi_career_nm>경력 3~5년</gi_career_nm>
+    <gi_salary_nm>면접 후 결정</gi_salary_nm>
+    <gi_duty>Python, Django, AWS 경험자 우대</gi_duty>
+    <gi_url>http://www.jobkorea.co.kr/Recruit/GI_Read/123456</gi_url>
+  </job>
+</jobs>
+매핑 테이블 (잠정 — 승인 후 태그명 검증 필요)
+예상 태그내부 컬럼검증 시 확인할 것gi_noexternal_id태그명이 다를 수 있음co_namecompany—gi_titletitle—gi_job_cd_nmjob_category사람인의 job-mid-code와 카테고리명이 다를 가능성 높음 → 매핑 테이블 별도 필요 (아래 3번 참고)gi_area_nmregion—gi_edu_nmeducation_level—gi_career_nmexperience_min/max"경력 3~5년" 같은 문자열에서 숫자 추출 필요 (정규식 파싱)gi_dutykeywords[]사람인처럼 정제된 키워드가 아니라 자연어 문장일 가능성 높음 → 키워드 추출 알고리즘(5장) 통과 필요gi_urlposting_url—
+정규화 코드 (XML 파서 포함, 태그명만 나중에 교체)
+javascript// api/lib/normalizers.js (이어서)
+const { XMLParser } = require('fast-xml-parser'); // npm install fast-xml-parser
+
+function normalizeJobKoreaJob(rawJob) {
+  const careerText = rawJob.gi_career_nm ?? '';
+  const { min, max } = parseExperienceRange(careerText);
+  return {
+    source: 'jobkorea',
+    external_id: String(rawJob.gi_no),
+    title: rawJob.gi_title,
+    company: rawJob.co_name,
+    job_category: mapJobKoreaCategory(rawJob.gi_job_cd_nm),  // 3번 매핑 테이블 통과
+    region: rawJob.gi_area_nm,
+    employment_type: null,        // 잡코리아 필드 확인 후 채움
+    experience_min: min,
+    experience_max: max,
+    education_level: rawJob.gi_edu_nm,
+    salary_code: null,            // 잡코리아는 코드 대신 텍스트(gi_salary_nm)일 가능성 → 별도 컬럼 고려
+    keywords: extractKeywordsFromText(rawJob.gi_duty),  // 자연어 → 키워드 추출(5장 알고리즘)
+    posting_url: rawJob.gi_url,
+    raw_requirements: rawJob.gi_duty,
+  };
+}
+
+function parseExperienceRange(text) {
+  if (text.includes('신입')) return { min: 0, max: 0 };
+  const m = text.match(/(\d+)\s*~\s*(\d+)/);
+  if (m) return { min: Number(m[1]), max: Number(m[2]) };
+  const single = text.match(/(\d+)\s*년\s*이상/);
+  if (single) return { min: Number(single[1]), max: null };
+  return { min: null, max: null };
+}
+
+async function fetchJobKoreaJobs(jobCode, page = 1) {
+  const url = `http://openapi.jobkorea.co.kr/...?key=${process.env.JOBKOREA_API_KEY}&jobCode=${jobCode}&page=${page}`;
+  const res = await fetch(url);
+  const xmlText = await res.text();
+  const parsed = new XMLParser().parse(xmlText);
+  const jobs = parsed.jobs.job; // 실제 루트 태그명은 승인 후 확인
+  return (Array.isArray(jobs) ? jobs : [jobs]).map(normalizeJobKoreaJob);
+}
+
+module.exports = { normalizeJobKoreaJob, parseExperienceRange, fetchJobKoreaJobs };
+
+3. 직무 카테고리 통합 매핑 (두 API의 직무명이 다른 문제 해결)
+사람인은 job-mid-code(예: "개발·데이터"), 잡코리아는 gi_job_cd_nm(예: "IT개발" 등 다른 명칭)을 쓸 가능성이 높아서, 두 소스를 같은 job_category로 묶는 통합 매핑 테이블이 반드시 필요해요. 이게 없으면 F1 대시보드에서 같은 직무인데 두 개로 쪼개져서 집계됨.
+javascript// api/lib/categoryMap.js
+// 내부 표준 카테고리명을 기준으로 양쪽 소스 원본명을 매핑
+const CATEGORY_MAP = {
+  "백엔드 개발자": { saramin: ["개발·데이터"], jobkorea: ["IT개발", "백엔드"] },
+  "프론트엔드 개발자": { saramin: ["개발·데이터"], jobkorea: ["IT개발", "프론트엔드"] },
+  "마케팅": { saramin: ["마케팅·홍보·조사"], jobkorea: ["마케팅"] },
+  // 실제 코드표 확인 후(사람인 "직무/직업 코드표" 페이지) 전체 채워야 함
+};
+
+function mapJobKoreaCategory(rawName) {
+  for (const [standard, sources] of Object.entries(CATEGORY_MAP)) {
+    if (sources.jobkorea.includes(rawName)) return standard;
+  }
+  return rawName; // 매핑 안 되면 원본 그대로 (나중에 수동 보정)
+}
+module.exports = { CATEGORY_MAP, mapJobKoreaCategory };
+
+할 일(승인 후 30분이면 끝남): 사람인 "직무/직업 코드표" 페이지(oapi.saramin.co.kr)와 잡코리아 승인 시 받는 코드표 문서를 열어서 위 CATEGORY_MAP에 직무 20~30개 정도만 채우면 끝. 코드 구조는 이미 다 짜여 있어서 데이터만 채우는 작업이라 막히지 않을 거예요.
+
+
+4. 승인 후 체크리스트 (이것만 확인하면 바로 연동 가능)
+
+ 잡코리아 실제 루트 XML 태그명 확인 (<jobs><job>이 맞는지)
+ 잡코리아 필드 태그명 확인 (gi_no, gi_title 등 — 위 추정과 다르면 normalizeJobKoreaJob 안의 rawJob.xxx 부분만 교체)
+ 사람인 "직무/직업 코드표" + 잡코리아 코드표 받아서 CATEGORY_MAP 채우기
+ 두 API 모두 테스트 키로 1건씩 호출해서 normalizeXxxJob() 통과 결과를 job_postings에 실제로 insert 해보기
