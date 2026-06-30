@@ -11,7 +11,7 @@ import type {
   DailyDigestContent,
   InterviewSessionRow,
   CreditTransactionRow
-} from "../../shared/types.js";
+} from "../shared/types.js";
 
 export type NewNews = Omit<RecruitmentNewsRow, "id" | "collected_at">;
 export type NewCompanyInfo = Omit<CompanyInfoRow, "id" | "collected_at">;

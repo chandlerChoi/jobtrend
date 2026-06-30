@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withErrorHandling } from "../lib/respond.js";
-import { requireUser } from "../lib/auth.js";
-import { db } from "../lib/db.js";
-import { evaluateAnswer } from "../lib/claude.js";
+import { withErrorHandling } from "../../server/respond.js";
+import { requireUser } from "../../server/auth.js";
+import { db } from "../../server/db.js";
+import { evaluateAnswer } from "../../server/claude.js";
 
 function scoreFor(answerText: string): number {
   return Math.min(95, 40 + Math.floor(answerText.trim().length / 4));

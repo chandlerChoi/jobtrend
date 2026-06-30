@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withErrorHandling } from "../lib/respond.js";
-import { requireUser } from "../lib/auth.js";
+import { withErrorHandling } from "../../server/respond.js";
+import { requireUser } from "../../server/auth.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   const user = await requireUser(req);

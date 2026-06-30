@@ -6,7 +6,7 @@
 // are demoed — tracked separately from the Open API integration work.
 import type { VercelRequest } from "@vercel/node";
 import { db } from "./db.js";
-import type { UserRow } from "../../shared/types.js";
+import type { UserRow } from "../shared/types.js";
 
 export class AuthError extends Error {
   status: number;

@@ -3,7 +3,7 @@
 // names directly so row shapes need no mapping.
 import { neon } from "@neondatabase/serverless";
 import type { Db } from "./dbTypes.js";
-import type { DailyDigestContent, InterviewSessionRow } from "../../shared/types.js";
+import type { DailyDigestContent, InterviewSessionRow } from "../shared/types.js";
 
 function client() {
   return neon(process.env.DATABASE_URL!);

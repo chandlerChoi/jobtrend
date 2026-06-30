@@ -2,9 +2,9 @@
 // api/job-fairs, ...) only ever reads from the DB — it never calls work24
 // directly — so this is the only place that touches the external API.
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withErrorHandling, requireCronSecret } from "../lib/respond.js";
-import { db } from "../lib/db.js";
-import { fetchRecruitmentNews, fetchCompanyInfo, fetchJobFairs } from "../lib/normalizers.js";
+import { withErrorHandling, requireCronSecret } from "../../server/respond.js";
+import { db } from "../../server/db.js";
+import { fetchRecruitmentNews, fetchCompanyInfo, fetchJobFairs } from "../../server/normalizers.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   requireCronSecret(req);

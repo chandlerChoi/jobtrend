@@ -7,8 +7,8 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { Client } from "@neondatabase/serverless";
-import { neonBackend } from "../api/lib/neonBackend.js";
-import { fetchRecruitmentNews, fetchCompanyInfo, fetchJobFairs } from "../api/lib/normalizers.js";
+import { neonBackend } from "../server/neonBackend.js";
+import { fetchRecruitmentNews, fetchCompanyInfo, fetchJobFairs } from "../server/normalizers.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

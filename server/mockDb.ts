@@ -14,7 +14,7 @@ import type {
   DailyDigestRow,
   InterviewSessionRow,
   CreditTransactionRow
-} from "../../shared/types.js";
+} from "../shared/types.js";
 
 interface Store {
   users: UserRow[];

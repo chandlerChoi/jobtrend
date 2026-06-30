@@ -2,7 +2,7 @@
 // live responses (개인회원 access only; 채용정보목록/상세 is blocked with
 // "개인회원은 사용할 수 없는 OPEN-API입니다." — see 잡트렌드 기술명세서 v3.0 §0).
 import { XMLParser } from "fast-xml-parser";
-import type { RecruitmentNewsRow, CompanyInfoRow, JobFairRow } from "../../shared/types.js";
+import type { RecruitmentNewsRow, CompanyInfoRow, JobFairRow } from "../shared/types.js";
 
 const BASE = "https://www.work24.go.kr/cm/openApi/call/wk";
 const parser = new XMLParser();

@@ -2,7 +2,7 @@
 // ANTHROPIC_API_KEY is set. Until the key is provisioned for the demo it
 // falls back to a deterministic mock so /api/interview/* works end-to-end
 // right now. No route handler needs to change when the key is added.
-import type { InterviewQuestion } from "../../shared/types.js";
+import type { InterviewQuestion } from "../shared/types.js";
 
 const QUESTION_BANK = [
   "이 직무에 지원한 이유와 본인의 강점을 연결해서 설명해주세요.",

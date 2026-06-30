@@ -1,9 +1,9 @@
 // TODO: real payment gateway (Toss/Stripe) integration is out of scope for
 // the MVP demo; this records the transaction as if payment already succeeded.
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withErrorHandling } from "../lib/respond.js";
-import { requireUser } from "../lib/auth.js";
-import { db } from "../lib/db.js";
+import { withErrorHandling } from "../../server/respond.js";
+import { requireUser } from "../../server/auth.js";
+import { db } from "../../server/db.js";
 
 const CREDIT_PACKS: Record<number, number> = { 5: 4900, 10: 8900 };
 

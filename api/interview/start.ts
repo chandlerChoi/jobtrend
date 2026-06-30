@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withErrorHandling } from "../lib/respond.js";
-import { requireUser } from "../lib/auth.js";
-import { db } from "../lib/db.js";
-import { generateInterviewQuestions } from "../lib/claude.js";
+import { withErrorHandling } from "../../server/respond.js";
+import { requireUser } from "../../server/auth.js";
+import { db } from "../../server/db.js";
+import { generateInterviewQuestions } from "../../server/claude.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   if (req.method !== "POST") {

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { db as store, findOrCreateGuestUser, recordCreditTransaction as recordTx, persistStore } from "./mockDb.js";
 import type { Db } from "./dbTypes.js";
-import type { CompanyAlertRow, InterviewSessionRow } from "../../shared/types.js";
+import type { CompanyAlertRow, InterviewSessionRow } from "../shared/types.js";
 
 export const mockBackend: Db = {
   async getOrCreateUser(userId) {

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { withErrorHandling } from "../lib/respond.js";
-import { requireUser } from "../lib/auth.js";
-import { db } from "../lib/db.js";
+import { withErrorHandling } from "../../server/respond.js";
+import { requireUser } from "../../server/auth.js";
+import { db } from "../../server/db.js";
 import type { DailyDigestContent } from "../../shared/types.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
