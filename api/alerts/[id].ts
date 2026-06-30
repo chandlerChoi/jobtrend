@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../lib/respond.js";
 import { requireUser } from "../lib/auth.js";
-import { db } from "../lib/mockDb.js";
+import { db } from "../lib/db.js";
 
-export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
-  const user = requireUser(req);
+export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
+  const user = await requireUser(req);
   const id = String(req.query.id);
 
   if (req.method !== "DELETE") {
@@ -12,11 +12,10 @@ export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
     return;
   }
 
-  const alert = db.keywordAlerts.find((a) => a.id === id && a.user_id === user.id);
-  if (!alert) {
+  const removed = await db.deactivateAlert(id, user.id);
+  if (!removed) {
     res.status(404).json({ error: "alert_not_found" });
     return;
   }
-  alert.active = false;
   res.status(204).end();
 });

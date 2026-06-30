@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../lib/respond.js";
 import { requireUser } from "../lib/auth.js";
-import { db, recordCreditTransaction } from "../lib/mockDb.js";
+import { db } from "../lib/db.js";
 import { generateInterviewQuestions } from "../lib/claude.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
@@ -11,7 +11,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  const user = requireUser(req);
+  const user = await requireUser(req);
   const { jdText, resumeText, jobCategory } = req.body ?? {};
 
   if (!jdText) {
@@ -26,8 +26,12 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
 
   const questions = await generateInterviewQuestions(jdText, resumeText ?? null);
 
-  user.interview_credits -= 1;
-  recordCreditTransaction(user.id, "consume", -1, user.interview_credits);
+  const remaining = await db.decrementCredit(user.id);
+  if (remaining < 0) {
+    res.status(402).json({ error: "insufficient_credits" });
+    return;
+  }
+  await db.recordCreditTransaction(user.id, "consume", -1, remaining);
 
   const session = {
     id: randomUUID(),
@@ -41,7 +45,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     status: "questions_generated" as const,
     created_at: new Date().toISOString()
   };
-  db.interviewSessions.push(session);
+  await db.createInterviewSession(session);
 
-  res.status(201).json({ sessionId: session.id, questions, creditsRemaining: user.interview_credits });
+  res.status(201).json({ sessionId: session.id, questions, creditsRemaining: remaining });
 });

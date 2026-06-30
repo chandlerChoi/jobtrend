@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../../lib/respond.js";
 import { requireUser } from "../../lib/auth.js";
-import { db } from "../../lib/mockDb.js";
+import { db } from "../../lib/db.js";
 
-export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
-  const user = requireUser(req);
+export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
+  const user = await requireUser(req);
   const sessionId = String(req.query.sessionId);
 
-  const session = db.interviewSessions.find((s) => s.id === sessionId && s.user_id === user.id);
+  const session = await db.getInterviewSession(sessionId, user.id);
   if (!session) {
     res.status(404).json({ error: "session_not_found" });
     return;
@@ -24,6 +24,7 @@ export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
   const overallImprovements = Array.from(new Set(session.answers_json.flatMap((a) => a.feedback.improvements))).slice(0, 3);
 
   session.feedback_json = { averageScore, overallStrengths, overallImprovements };
+  await db.updateInterviewSession(session);
 
   res.status(200).json(session.feedback_json);
 });

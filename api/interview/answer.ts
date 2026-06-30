@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../lib/respond.js";
 import { requireUser } from "../lib/auth.js";
-import { db } from "../lib/mockDb.js";
+import { db } from "../lib/db.js";
 import { evaluateAnswer } from "../lib/claude.js";
 
 function scoreFor(answerText: string): number {
@@ -14,10 +14,10 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  const user = requireUser(req);
+  const user = await requireUser(req);
   const { sessionId, questionId, answerText } = req.body ?? {};
 
-  const session = db.interviewSessions.find((s) => s.id === sessionId && s.user_id === user.id);
+  const session = await db.getInterviewSession(sessionId, user.id);
   if (!session) {
     res.status(404).json({ error: "session_not_found" });
     return;
@@ -33,12 +33,11 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   const score = scoreFor(answerText ?? "");
 
   session.answers_json.push({ questionId, answerText, score, feedback });
-  session.status = "answering";
 
   const nextQuestion = session.questions_json.find((q) => q.order === question.order + 1);
-  if (!nextQuestion) {
-    session.status = "completed";
-  }
+  session.status = nextQuestion ? "answering" : "completed";
+
+  await db.updateInterviewSession(session);
 
   res.status(200).json({ feedback, nextQuestionId: nextQuestion?.id ?? null });
 });

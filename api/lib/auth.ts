@@ -5,7 +5,7 @@
 // (db/schema.sql already has users.password_hash for this) once core features
 // are demoed — tracked separately from the Open API integration work.
 import type { VercelRequest } from "@vercel/node";
-import { findOrCreateGuestUser } from "./mockDb.js";
+import { db } from "./db.js";
 import type { UserRow } from "../../shared/types.js";
 
 export class AuthError extends Error {
@@ -16,10 +16,10 @@ export class AuthError extends Error {
   }
 }
 
-export function requireUser(req: VercelRequest): UserRow {
+export async function requireUser(req: VercelRequest): Promise<UserRow> {
   const userId = req.headers["x-user-id"];
   if (!userId || typeof userId !== "string") {
     throw new AuthError("x-user-id header required");
   }
-  return findOrCreateGuestUser(userId);
+  return db.getOrCreateUser(userId);
 }

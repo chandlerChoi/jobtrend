@@ -3,7 +3,7 @@
 -- (사람인/잡코리아) happens last — see api/lib/normalizers.ts and
 -- api/lib/categoryMap.ts, which are already written against this schema.
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255),
@@ -12,7 +12,7 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE job_postings (
+CREATE TABLE IF NOT EXISTS job_postings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source VARCHAR(20) NOT NULL,              -- 'work24' | 'saramin' | 'jobkorea'
   external_id VARCHAR(100) NOT NULL,
@@ -32,10 +32,10 @@ CREATE TABLE job_postings (
   collected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(source, external_id)
 );
-CREATE INDEX idx_postings_category ON job_postings(job_category);
-CREATE INDEX idx_postings_collected ON job_postings(collected_at);
+CREATE INDEX IF NOT EXISTS idx_postings_category ON job_postings(job_category);
+CREATE INDEX IF NOT EXISTS idx_postings_collected ON job_postings(collected_at);
 
-CREATE TABLE job_category_stats (
+CREATE TABLE IF NOT EXISTS job_category_stats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   job_category VARCHAR(100) NOT NULL,
   keyword VARCHAR(100) NOT NULL,
@@ -43,9 +43,9 @@ CREATE TABLE job_category_stats (
   period_date DATE NOT NULL,
   UNIQUE(job_category, keyword, period_date)
 );
-CREATE INDEX idx_stats_category_date ON job_category_stats(job_category, period_date);
+CREATE INDEX IF NOT EXISTS idx_stats_category_date ON job_category_stats(job_category, period_date);
 
-CREATE TABLE job_similarity (
+CREATE TABLE IF NOT EXISTS job_similarity (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   job_category_a VARCHAR(100) NOT NULL,
   job_category_b VARCHAR(100) NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE job_similarity (
   UNIQUE(job_category_a, job_category_b)
 );
 
-CREATE TABLE keyword_alerts (
+CREATE TABLE IF NOT EXISTS keyword_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   keyword VARCHAR(100) NOT NULL,
@@ -65,9 +65,9 @@ CREATE TABLE keyword_alerts (
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_alerts_user ON keyword_alerts(user_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_user ON keyword_alerts(user_id);
 
-CREATE TABLE daily_reports (
+CREATE TABLE IF NOT EXISTS daily_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   report_date DATE NOT NULL,
@@ -76,7 +76,7 @@ CREATE TABLE daily_reports (
   UNIQUE(user_id, report_date)
 );
 
-CREATE TABLE interview_sessions (
+CREATE TABLE IF NOT EXISTS interview_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   job_category VARCHAR(100),
@@ -89,7 +89,7 @@ CREATE TABLE interview_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE credit_transactions (
+CREATE TABLE IF NOT EXISTS credit_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type VARCHAR(20) NOT NULL,                -- 'charge' | 'consume' | 'monthly_grant'

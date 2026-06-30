@@ -1,6 +1,5 @@
-import { randomUUID } from "crypto";
 import { CATEGORIES } from "../../shared/categories.js";
-import { db } from "./mockDb.js";
+import { db } from "./db.js";
 import type { JobCategoryStatRow } from "../../shared/types.js";
 
 function vectorFor(category: string, stats: JobCategoryStatRow[], vocabulary: string[]): number[] {
@@ -20,12 +19,10 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
 // Run weekly via api/cron/compute-similarity.ts. Populates job_similarity for
 // every category pair so /api/adjacent-jobs/:jobCategory is a plain lookup.
-export function computeAllSimilarities(): void {
-  const latestDate = db.jobCategoryStats.reduce(
-    (max, s) => (s.period_date > max ? s.period_date : max),
-    ""
-  );
-  const latestStats = db.jobCategoryStats.filter((s) => s.period_date === latestDate);
+export async function computeAllSimilarities(): Promise<void> {
+  const latestDate = await db.getLatestStatDate();
+  if (!latestDate) return;
+  const latestStats = await db.getStatsForDate(latestDate);
   const vocabulary = Array.from(new Set(latestStats.map((s) => s.keyword)));
 
   for (const a of CATEGORIES) {
@@ -43,23 +40,7 @@ export function computeAllSimilarities(): void {
         })
         .slice(0, 5);
 
-      const existing = db.jobSimilarity.find(
-        (s) => s.job_category_a === a.name && s.job_category_b === b.name
-      );
-      if (existing) {
-        existing.similarity_score = similarity;
-        existing.shared_keywords = sharedKeywords;
-        existing.computed_at = new Date().toISOString();
-      } else {
-        db.jobSimilarity.push({
-          id: randomUUID(),
-          job_category_a: a.name,
-          job_category_b: b.name,
-          similarity_score: similarity,
-          shared_keywords: sharedKeywords,
-          computed_at: new Date().toISOString()
-        });
-      }
+      await db.upsertSimilarity(a.name, b.name, similarity, sharedKeywords);
     }
   }
 }

@@ -3,17 +3,17 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../lib/respond.js";
 import { requireUser } from "../lib/auth.js";
-import { recordCreditTransaction } from "../lib/mockDb.js";
+import { db } from "../lib/db.js";
 
 const CREDIT_PACKS: Record<number, number> = { 5: 4900, 10: 8900 };
 
-export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
+export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   if (req.method !== "POST") {
     res.status(405).json({ error: "method_not_allowed" });
     return;
   }
 
-  const user = requireUser(req);
+  const user = await requireUser(req);
   const { credits } = req.body ?? {};
 
   if (!CREDIT_PACKS[credits]) {
@@ -21,8 +21,8 @@ export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
     return;
   }
 
-  user.interview_credits += credits;
-  recordCreditTransaction(user.id, "charge", credits, user.interview_credits);
+  const creditsRemaining = await db.addCredits(user.id, credits);
+  await db.recordCreditTransaction(user.id, "charge", credits, creditsRemaining);
 
-  res.status(200).json({ creditsRemaining: user.interview_credits, charged: CREDIT_PACKS[credits] });
+  res.status(200).json({ creditsRemaining, charged: CREDIT_PACKS[credits] });
 });

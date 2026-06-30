@@ -199,6 +199,10 @@ export const db = {
   }
 };
 
+export function recomputeStatsForDate(dateStr: string): void {
+  computeStatsForDate(getStore(), dateStr);
+}
+
 export function createUser(email: string, passwordHash: string | null): UserRow {
   const user: UserRow = {
     id: randomUUID(),

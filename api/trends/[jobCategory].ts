@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../lib/respond.js";
-import { db } from "../lib/mockDb.js";
+import { db } from "../lib/db.js";
 import { bucketCareerLevel } from "../lib/keywordExtractor.js";
 import { CATEGORIES } from "../../shared/categories.js";
 
@@ -14,7 +14,7 @@ function withPct<T extends { count: number }>(rows: T[], total: number) {
   return rows.map((r) => ({ ...r, pct: total === 0 ? 0 : Math.round((r.count / total) * 1000) / 10 }));
 }
 
-export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
+export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   const jobCategory = decodeURIComponent(String(req.query.jobCategory ?? ""));
   const period = String(req.query.period ?? "30d");
   const days = period.endsWith("d") ? Number(period.slice(0, -1)) || 30 : 30;
@@ -28,7 +28,7 @@ export default withErrorHandling((req: VercelRequest, res: VercelResponse) => {
   since.setDate(since.getDate() - days);
   const sinceStr = since.toISOString().slice(0, 10);
 
-  const postings = db.jobPostings.filter((p) => p.job_category === jobCategory && p.posted_at >= sinceStr);
+  const postings = await db.getPostingsSince(jobCategory, sinceStr);
 
   if (postings.length === 0) {
     res.status(404).json({ error: "no_data_collected", jobCategory });

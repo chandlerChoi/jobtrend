@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { AuthError } from "./auth.js";
-import { persistStore } from "./mockDb.js";
+import { persistStore } from "./db.js";
 
 export function withErrorHandling(
   handler: (req: VercelRequest, res: VercelResponse) => void | Promise<void>
