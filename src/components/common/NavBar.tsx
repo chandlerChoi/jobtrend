@@ -1,9 +1,10 @@
 import { NavLink } from "react-router-dom";
 
 const LINKS = [
-  { to: "/", label: "직무 검색" },
-  { to: "/alerts", label: "키워드 알람" },
-  { to: "/reports", label: "데일리 리포트" },
+  { to: "/news", label: "공채속보" },
+  { to: "/job-fairs", label: "채용행사" },
+  { to: "/alerts", label: "관심기업 알림" },
+  { to: "/digest", label: "데일리 다이제스트" },
   { to: "/interview", label: "AI 모의면접" },
   { to: "/mypage", label: "마이페이지" }
 ];

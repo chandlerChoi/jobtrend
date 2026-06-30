@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { startInterview } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import { useCredits } from "../context/CreditContext";
 
 export default function InterviewPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { credits, refresh } = useCredits();
-  const [jd, setJd] = useState("");
+  const [jd, setJd] = useState((location.state as { jdText?: string } | null)?.jdText ?? "");
   const [resume, setResume] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [insufficientCredits, setInsufficientCredits] = useState(false);

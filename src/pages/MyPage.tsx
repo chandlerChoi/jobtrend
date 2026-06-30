@@ -1,5 +1,5 @@
 import { useCredits } from "../context/CreditContext";
-import { useAlerts } from "../hooks/useAlerts";
+import { useCompanyAlerts } from "../hooks/useCompanyAlerts";
 import CreditMeter from "../components/feature/CreditMeter";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import EmptyState from "../components/common/EmptyState";
@@ -11,13 +11,13 @@ const CREDIT_PACKS = [
 
 export default function MyPage() {
   const { credits, planTier, loading: creditsLoading, charge } = useCredits();
-  const { alerts, loading: alertsLoading, remove } = useAlerts();
+  const { alerts, loading: alertsLoading, remove } = useCompanyAlerts();
 
   return (
     <div className="space-y-8 animate-fadeUp">
       <div>
         <h1 className="text-2xl font-bold">마이페이지</h1>
-        <p className="mt-1 text-sm text-white/50">키워드 알람과 모의면접 크레딧을 관리하세요.</p>
+        <p className="mt-1 text-sm text-white/50">관심기업 알람과 모의면접 크레딧을 관리하세요.</p>
       </div>
 
       <section className="space-y-4">
@@ -38,13 +38,13 @@ export default function MyPage() {
       </section>
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-5">
-        <h2 className="mb-4 text-sm font-semibold text-white/80">등록된 키워드 알람 ({alerts.length}/5)</h2>
+        <h2 className="mb-4 text-sm font-semibold text-white/80">등록된 관심기업 ({alerts.length}/5)</h2>
         {alertsLoading && <LoadingSpinner />}
-        {!alertsLoading && alerts.length === 0 && <EmptyState title="등록된 알람이 없어요." />}
+        {!alertsLoading && alerts.length === 0 && <EmptyState title="등록된 관심기업이 없어요." />}
         <div className="space-y-2">
           {alerts.map((a) => (
             <div key={a.id} className="flex items-center justify-between rounded-lg bg-ink-900 px-4 py-3 text-sm">
-              <span>{a.keyword}</span>
+              <span>{a.company_name}</span>
               <button onClick={() => remove(a.id)} className="text-xs text-white/40 hover:text-white">
                 삭제
               </button>

@@ -1,7 +1,4 @@
 {
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
-  "crons": [
-    { "path": "/api/cron/collect-postings", "schedule": "0 1 * * *" },
-    { "path": "/api/cron/compute-similarity", "schedule": "0 2 * * 1" }
-  ]
+  "crons": [{ "path": "/api/cron/collect-news", "schedule": "0 1 * * *" }]
 }

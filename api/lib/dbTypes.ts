@@ -1,20 +1,21 @@
-// Unified persistence interface. Two implementations satisfy this:
-// - mockBackend.ts: wraps the file-persisted mock store (no DB needed)
+// Unified persistence interface (v3.0). Two implementations satisfy this:
+// - mockBackend.ts: in-memory + file-persisted store (no DB needed)
 // - neonBackend.ts: real Neon/Postgres queries against db/schema.sql
-// api/lib/db.ts picks one based on whether DATABASE_URL is set, so route
-// handlers never know which backend they're talking to.
+// api/lib/db.ts picks one based on whether DATABASE_URL is set.
 import type {
   UserRow,
-  JobPostingRow,
-  JobCategoryStatRow,
-  JobSimilarityRow,
-  KeywordAlertRow,
+  RecruitmentNewsRow,
+  CompanyInfoRow,
+  JobFairRow,
+  CompanyAlertRow,
+  DailyDigestContent,
   InterviewSessionRow,
-  DailyReportContent,
   CreditTransactionRow
 } from "../../shared/types.js";
 
-export type NewPosting = Omit<JobPostingRow, "id" | "collected_at">;
+export type NewNews = Omit<RecruitmentNewsRow, "id" | "collected_at">;
+export type NewCompanyInfo = Omit<CompanyInfoRow, "id" | "collected_at">;
+export type NewJobFair = Omit<JobFairRow, "id" | "collected_at">;
 
 export interface Db {
   getOrCreateUser(userId: string): Promise<UserRow>;
@@ -27,26 +28,24 @@ export interface Db {
     balanceAfter: number
   ): Promise<void>;
 
-  getPostingsSince(category: string, sinceDate: string): Promise<JobPostingRow[]>;
-  getPostingsByDate(date: string): Promise<JobPostingRow[]>;
-  insertPostingIfNew(posting: NewPosting): Promise<boolean>;
-  countPostings(): Promise<number>;
+  listRecruitmentNews(opts: { companyName?: string; limit?: number }): Promise<RecruitmentNewsRow[]>;
+  getRecruitmentNewsByDate(date: string): Promise<RecruitmentNewsRow[]>;
+  insertNewsIfNew(news: NewNews): Promise<boolean>;
+  countNews(): Promise<number>;
+  recentNewsTrend(days: number): Promise<{ date: string; count: number }[]>;
 
-  getStatFrequency(keyword: string, jobCategory: string | null, date: string): Promise<number>;
-  recomputeStatsForDate(date: string): Promise<void>;
-  getLatestStatDate(): Promise<string | null>;
-  getStatsForDate(date: string): Promise<JobCategoryStatRow[]>;
+  getCompanyInfo(companyName: string): Promise<CompanyInfoRow | null>;
+  upsertCompanyInfo(info: NewCompanyInfo): Promise<void>;
 
-  getSimilarities(categoryA: string): Promise<JobSimilarityRow[]>;
-  hasAnySimilarity(): Promise<boolean>;
-  upsertSimilarity(a: string, b: string, score: number, shared: string[]): Promise<void>;
+  listJobFairs(): Promise<JobFairRow[]>;
+  upsertJobFair(fair: NewJobFair): Promise<void>;
 
-  listActiveAlerts(userId: string): Promise<KeywordAlertRow[]>;
-  countActiveAlerts(userId: string): Promise<number>;
-  createAlert(row: Omit<KeywordAlertRow, "id" | "created_at">): Promise<KeywordAlertRow>;
-  deactivateAlert(id: string, userId: string): Promise<boolean>;
+  listActiveCompanyAlerts(userId: string): Promise<CompanyAlertRow[]>;
+  countActiveCompanyAlerts(userId: string): Promise<number>;
+  createCompanyAlert(row: Omit<CompanyAlertRow, "id" | "created_at">): Promise<CompanyAlertRow>;
+  deactivateCompanyAlert(id: string, userId: string): Promise<boolean>;
 
-  upsertDailyReport(userId: string, date: string, content: DailyReportContent): Promise<void>;
+  upsertDailyDigest(userId: string, date: string, content: DailyDigestContent): Promise<void>;
 
   createInterviewSession(row: InterviewSessionRow): Promise<void>;
   getInterviewSession(id: string, userId: string): Promise<InterviewSessionRow | null>;

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { listAlerts, createAlert, deleteAlert } from "../api/endpoints";
 import { ApiError } from "../api/client";
-import type { KeywordAlertRow } from "../../shared/types";
+import type { CompanyAlertRow } from "../../shared/types";
 
-export function useAlerts() {
-  const [alerts, setAlerts] = useState<KeywordAlertRow[]>([]);
+export function useCompanyAlerts() {
+  const [alerts, setAlerts] = useState<CompanyAlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [limitReached, setLimitReached] = useState(false);
 
@@ -18,9 +18,9 @@ export function useAlerts() {
   }, [refresh]);
 
   const add = useCallback(
-    async (payload: { keyword: string; jobCategory?: string; region?: string; channel: "email" | "push" }) => {
+    async (companyName: string, channel: "email" | "push" = "email") => {
       try {
-        await createAlert(payload);
+        await createAlert({ companyName, channel });
         setLimitReached(false);
         await refresh();
       } catch (err) {

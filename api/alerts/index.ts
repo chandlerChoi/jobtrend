@@ -10,30 +10,28 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   const user = await requireUser(req);
 
   if (req.method === "GET") {
-    const alerts = await db.listActiveAlerts(user.id);
+    const alerts = await db.listActiveCompanyAlerts(user.id);
     res.status(200).json({ alerts });
     return;
   }
 
   if (req.method === "POST") {
-    const { keyword, jobCategory, region, channel } = req.body ?? {};
-    if (!keyword) {
-      res.status(400).json({ error: "keyword required" });
+    const { companyName, channel } = req.body ?? {};
+    if (!companyName) {
+      res.status(400).json({ error: "companyName required" });
       return;
     }
 
-    const activeCount = await db.countActiveAlerts(user.id);
+    const activeCount = await db.countActiveCompanyAlerts(user.id);
     const limit = user.plan_tier === "premium" ? PREMIUM_ALERT_LIMIT : FREE_ALERT_LIMIT;
     if (activeCount >= limit) {
       res.status(403).json({ reason: "FREE_LIMIT_EXCEEDED", limit });
       return;
     }
 
-    const alert = await db.createAlert({
+    const alert = await db.createCompanyAlert({
       user_id: user.id,
-      keyword,
-      job_category: jobCategory ?? null,
-      region: region ?? null,
+      company_name: companyName,
       channel: channel ?? "email",
       active: true
     });

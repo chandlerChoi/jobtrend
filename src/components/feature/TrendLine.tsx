@@ -1,8 +1,9 @@
 interface TrendLineProps {
   data: { date: string; count: number }[];
+  title?: string;
 }
 
-export default function TrendLine({ data }: TrendLineProps) {
+export default function TrendLine({ data, title = "등록 추이" }: TrendLineProps) {
   const max = Math.max(...data.map((d) => d.count), 1);
   const width = 600;
   const height = 120;
@@ -14,7 +15,7 @@ export default function TrendLine({ data }: TrendLineProps) {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-white/80">최근 30일 공고 수 추이</h3>
+      <h3 className="mb-4 text-sm font-semibold text-white/80">{title}</h3>
       <svg viewBox={`0 0 ${width} ${height}`} className="h-32 w-full">
         <polyline points={points} fill="none" stroke="#6366f1" strokeWidth={2} />
       </svg>

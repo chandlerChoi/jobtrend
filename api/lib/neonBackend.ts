@@ -1,10 +1,9 @@
-// Real Neon/Postgres implementation of the Db interface, used once
+// Real Neon/Postgres implementation of the Db interface (v3.0), used once
 // DATABASE_URL is set (see api/lib/db.ts). Mirrors db/schema.sql column
 // names directly so row shapes need no mapping.
 import { neon } from "@neondatabase/serverless";
-import { CATEGORIES, KEYWORD_DICTIONARY } from "../../shared/categories.js";
 import type { Db } from "./dbTypes.js";
-import type { JobCategoryStatRow, DailyReportContent, InterviewSessionRow } from "../../shared/types.js";
+import type { DailyDigestContent, InterviewSessionRow } from "../../shared/types.js";
 
 function client() {
   return neon(process.env.DATABASE_URL!);
@@ -53,166 +52,153 @@ export const neonBackend: Db = {
     `;
   },
 
-  async getPostingsSince(category, sinceDate) {
+  async listRecruitmentNews({ companyName, limit = 50 }) {
     const sql = client();
-    const rows = await sql`
-      SELECT * FROM job_postings WHERE job_category = ${category} AND posted_at >= ${sinceDate}
-    `;
+    const rows = companyName
+      ? await sql`
+          SELECT * FROM recruitment_news WHERE company_name = ${companyName}
+          ORDER BY posted_at DESC NULLS LAST LIMIT ${limit}
+        `
+      : await sql`SELECT * FROM recruitment_news ORDER BY posted_at DESC NULLS LAST LIMIT ${limit}`;
     return rows as any;
   },
 
-  async getPostingsByDate(date) {
+  async getRecruitmentNewsByDate(date) {
     const sql = client();
-    const rows = await sql`SELECT * FROM job_postings WHERE posted_at = ${date}`;
+    const rows = await sql`SELECT * FROM recruitment_news WHERE posted_at = ${date}`;
     return rows as any;
   },
 
-  async insertPostingIfNew(posting) {
+  async insertNewsIfNew(news) {
     const sql = client();
     const rows = await sql`
-      INSERT INTO job_postings (
-        source, external_id, title, company, job_category, region, employment_type,
-        experience_min, experience_max, education_level, salary_code, keywords,
-        raw_requirements, posting_url, posted_at
+      INSERT INTO recruitment_news (
+        external_id, company_name, title, company_type, employment_types,
+        posted_at, closing_at, logo_url, posting_url
       ) VALUES (
-        ${posting.source}, ${posting.external_id}, ${posting.title}, ${posting.company},
-        ${posting.job_category}, ${posting.region}, ${posting.employment_type},
-        ${posting.experience_min}, ${posting.experience_max}, ${posting.education_level},
-        ${posting.salary_code}, ${posting.keywords}, ${posting.raw_requirements},
-        ${posting.posting_url}, ${posting.posted_at}
+        ${news.external_id}, ${news.company_name}, ${news.title}, ${news.company_type},
+        ${news.employment_types}, ${news.posted_at}, ${news.closing_at}, ${news.logo_url}, ${news.posting_url}
       )
-      ON CONFLICT (source, external_id) DO NOTHING
+      ON CONFLICT (external_id) DO NOTHING
       RETURNING id
     `;
     return rows.length > 0;
   },
 
-  async countPostings() {
+  async countNews() {
     const sql = client();
-    const rows = await sql`SELECT count(*)::int AS count FROM job_postings`;
+    const rows = await sql`SELECT count(*)::int AS count FROM recruitment_news`;
     return rows[0].count as number;
   },
 
-  async getStatFrequency(keyword, jobCategory, date) {
-    const sql = client();
-    const rows = jobCategory
-      ? await sql`
-          SELECT coalesce(sum(frequency), 0)::int AS total FROM job_category_stats
-          WHERE keyword = ${keyword} AND period_date = ${date} AND job_category = ${jobCategory}
-        `
-      : await sql`
-          SELECT coalesce(sum(frequency), 0)::int AS total FROM job_category_stats
-          WHERE keyword = ${keyword} AND period_date = ${date}
-        `;
-    return rows[0].total as number;
-  },
-
-  async recomputeStatsForDate(date) {
-    const sql = client();
-    for (const category of CATEGORIES) {
-      const postings = await sql`
-        SELECT keywords FROM job_postings WHERE job_category = ${category.name} AND posted_at <= ${date}
-      `;
-      const freq = new Map<string, number>();
-      for (const row of postings as any[]) {
-        for (const k of row.keywords as string[]) freq.set(k, (freq.get(k) ?? 0) + 1);
-      }
-      for (const keyword of KEYWORD_DICTIONARY) {
-        const frequency = freq.get(keyword) ?? 0;
-        if (frequency === 0) continue;
-        await sql`
-          INSERT INTO job_category_stats (job_category, keyword, frequency, period_date)
-          VALUES (${category.name}, ${keyword}, ${frequency}, ${date})
-          ON CONFLICT (job_category, keyword, period_date) DO UPDATE SET frequency = ${frequency}
-        `;
-      }
-    }
-  },
-
-  async getLatestStatDate() {
-    const sql = client();
-    const rows = await sql`SELECT max(period_date) AS latest FROM job_category_stats`;
-    return (rows[0]?.latest as string) ?? null;
-  },
-
-  async getStatsForDate(date) {
-    const sql = client();
-    const rows = await sql`SELECT * FROM job_category_stats WHERE period_date = ${date}`;
-    return rows as unknown as JobCategoryStatRow[];
-  },
-
-  async getSimilarities(categoryA) {
+  async recentNewsTrend(days) {
     const sql = client();
     const rows = await sql`
-      SELECT * FROM job_similarity WHERE job_category_a = ${categoryA} ORDER BY similarity_score DESC
+      SELECT posted_at::text AS date, count(*)::int AS count FROM recruitment_news
+      WHERE posted_at >= (CURRENT_DATE - ${days}::int)
+      GROUP BY posted_at
     `;
-    return rows as any;
+    const byDate = new Map((rows as any[]).map((r) => [r.date, r.count]));
+    return Array.from({ length: days }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      const key = date.toISOString().slice(0, 10);
+      return { date: key, count: byDate.get(key) ?? 0 };
+    });
   },
 
-  async hasAnySimilarity() {
+  async getCompanyInfo(companyName) {
     const sql = client();
-    const rows = await sql`SELECT count(*)::int AS count FROM job_similarity`;
-    return (rows[0].count as number) > 0;
+    const rows = await sql`SELECT * FROM company_info WHERE company_name = ${companyName} LIMIT 1`;
+    return (rows[0] as any) ?? null;
   },
 
-  async upsertSimilarity(a, b, score, shared) {
+  async upsertCompanyInfo(info) {
     const sql = client();
     await sql`
-      INSERT INTO job_similarity (job_category_a, job_category_b, similarity_score, shared_keywords, computed_at)
-      VALUES (${a}, ${b}, ${score}, ${shared}, now())
-      ON CONFLICT (job_category_a, job_category_b)
-      DO UPDATE SET similarity_score = ${score}, shared_keywords = ${shared}, computed_at = now()
+      INSERT INTO company_info (
+        external_id, company_name, company_type, business_no, intro_summary,
+        intro_detail, homepage, logo_url
+      ) VALUES (
+        ${info.external_id}, ${info.company_name}, ${info.company_type}, ${info.business_no},
+        ${info.intro_summary}, ${info.intro_detail}, ${info.homepage}, ${info.logo_url}
+      )
+      ON CONFLICT (external_id) DO UPDATE SET
+        company_type = ${info.company_type}, intro_summary = ${info.intro_summary},
+        intro_detail = ${info.intro_detail}, homepage = ${info.homepage}, logo_url = ${info.logo_url}
     `;
   },
 
-  async listActiveAlerts(userId) {
+  async listJobFairs() {
     const sql = client();
-    const rows = await sql`SELECT * FROM keyword_alerts WHERE user_id = ${userId} AND active = true`;
+    const rows = await sql`SELECT * FROM job_fairs ORDER BY start_date NULLS LAST`;
     return rows as any;
   },
 
-  async countActiveAlerts(userId) {
+  async upsertJobFair(fair) {
+    const sql = client();
+    await sql`
+      INSERT INTO job_fairs (
+        external_id, area_code, area, event_name, event_term, start_date,
+        event_place, participating_companies, contact_phone, contact_email
+      ) VALUES (
+        ${fair.external_id}, ${fair.area_code}, ${fair.area}, ${fair.event_name}, ${fair.event_term},
+        ${fair.start_date}, ${fair.event_place}, ${fair.participating_companies}, ${fair.contact_phone}, ${fair.contact_email}
+      )
+      ON CONFLICT (external_id) DO UPDATE SET
+        event_place = ${fair.event_place}, participating_companies = ${fair.participating_companies},
+        contact_phone = ${fair.contact_phone}, contact_email = ${fair.contact_email}
+    `;
+  },
+
+  async listActiveCompanyAlerts(userId) {
+    const sql = client();
+    const rows = await sql`SELECT * FROM company_alerts WHERE user_id = ${userId} AND active = true`;
+    return rows as any;
+  },
+
+  async countActiveCompanyAlerts(userId) {
     const sql = client();
     const rows = await sql`
-      SELECT count(*)::int AS count FROM keyword_alerts WHERE user_id = ${userId} AND active = true
+      SELECT count(*)::int AS count FROM company_alerts WHERE user_id = ${userId} AND active = true
     `;
     return rows[0].count as number;
   },
 
-  async createAlert(row) {
+  async createCompanyAlert(row) {
     const sql = client();
     const rows = await sql`
-      INSERT INTO keyword_alerts (user_id, keyword, job_category, region, channel, active)
-      VALUES (${row.user_id}, ${row.keyword}, ${row.job_category}, ${row.region}, ${row.channel}, ${row.active})
+      INSERT INTO company_alerts (user_id, company_name, channel, active)
+      VALUES (${row.user_id}, ${row.company_name}, ${row.channel}, ${row.active})
       RETURNING *
     `;
     return rows[0] as any;
   },
 
-  async deactivateAlert(id, userId) {
+  async deactivateCompanyAlert(id, userId) {
     const sql = client();
     const rows = await sql`
-      UPDATE keyword_alerts SET active = false WHERE id = ${id} AND user_id = ${userId}
+      UPDATE company_alerts SET active = false WHERE id = ${id} AND user_id = ${userId}
       RETURNING id
     `;
     return rows.length > 0;
   },
 
-  async upsertDailyReport(userId, date, content: DailyReportContent) {
+  async upsertDailyDigest(userId, date, content: DailyDigestContent) {
     const sql = client();
     await sql`
-      INSERT INTO daily_reports (user_id, report_date, content_json)
+      INSERT INTO daily_digests (user_id, digest_date, content_json)
       VALUES (${userId}, ${date}, ${JSON.stringify(content)})
-      ON CONFLICT (user_id, report_date) DO UPDATE SET content_json = ${JSON.stringify(content)}
+      ON CONFLICT (user_id, digest_date) DO UPDATE SET content_json = ${JSON.stringify(content)}
     `;
   },
 
   async createInterviewSession(row: InterviewSessionRow) {
     const sql = client();
     await sql`
-      INSERT INTO interview_sessions (id, user_id, job_category, jd_text, resume_text, questions_json, answers_json, feedback_json, status)
+      INSERT INTO interview_sessions (id, user_id, jd_text, resume_text, questions_json, answers_json, feedback_json, status)
       VALUES (
-        ${row.id}, ${row.user_id}, ${row.job_category}, ${row.jd_text}, ${row.resume_text},
+        ${row.id}, ${row.user_id}, ${row.jd_text}, ${row.resume_text},
         ${JSON.stringify(row.questions_json)}, ${JSON.stringify(row.answers_json)},
         ${row.feedback_json ? JSON.stringify(row.feedback_json) : null}, ${row.status}
       )

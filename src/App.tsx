@@ -3,10 +3,11 @@ import NavBar from "./components/common/NavBar";
 import { AuthProvider } from "./context/AuthContext";
 import { CreditProvider } from "./context/CreditContext";
 import OnboardingPage from "./pages/OnboardingPage";
-import TrendDashboardPage from "./pages/TrendDashboardPage";
+import NewsFeedPage from "./pages/NewsFeedPage";
+import CompanyPage from "./pages/CompanyPage";
 import AlertSettingsPage from "./pages/AlertSettingsPage";
-import ReportInboxPage from "./pages/ReportInboxPage";
-import AdjacentJobsPage from "./pages/AdjacentJobsPage";
+import DigestInboxPage from "./pages/DigestInboxPage";
+import JobFairCalendarPage from "./pages/JobFairCalendarPage";
 import InterviewPage from "./pages/InterviewPage";
 import InterviewSessionPage from "./pages/InterviewSessionPage";
 import MyPage from "./pages/MyPage";
@@ -20,10 +21,11 @@ export default function App() {
           <main className="mx-auto max-w-6xl px-6 py-8">
             <Routes>
               <Route path="/" element={<OnboardingPage />} />
-              <Route path="/trends/:jobCategory" element={<TrendDashboardPage />} />
+              <Route path="/news" element={<NewsFeedPage />} />
+              <Route path="/companies/:name" element={<CompanyPage />} />
               <Route path="/alerts" element={<AlertSettingsPage />} />
-              <Route path="/reports" element={<ReportInboxPage />} />
-              <Route path="/adjacent/:jobCategory" element={<AdjacentJobsPage />} />
+              <Route path="/digest" element={<DigestInboxPage />} />
+              <Route path="/job-fairs" element={<JobFairCalendarPage />} />
               <Route path="/interview" element={<InterviewPage />} />
               <Route path="/interview/:sessionId" element={<InterviewSessionPage />} />
               <Route path="/mypage" element={<MyPage />} />

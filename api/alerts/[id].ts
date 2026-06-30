@@ -12,7 +12,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  const removed = await db.deactivateAlert(id, user.id);
+  const removed = await db.deactivateCompanyAlert(id, user.id);
   if (!removed) {
     res.status(404).json({ error: "alert_not_found" });
     return;

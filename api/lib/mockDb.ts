@@ -1,52 +1,44 @@
-// File-backed stand-in for Neon DB, shaped exactly like db/schema.sql.
-// TODO(api-integration-last): swap for a real @neondatabase/serverless client
-// once 사람인/잡코리아 keys are approved. Until then every /api route
-// reads/writes this store, so swapping the persistence layer later doesn't
-// require touching route handlers.
-//
-// Plain in-memory state doesn't work here: `vercel dev` (and real Lambda
-// cold starts) can run each request in a fresh process, so a module-level
-// object would silently reset between calls. Persisting to a JSON file in
-// the OS temp dir survives that without standing up a real database.
+// File-backed stand-in for Neon DB (v3.0 shape). Persisting to a JSON file
+// in the OS temp dir survives `vercel dev`/Lambda's per-request process
+// forking, which plain module-level state doesn't.
 import { randomUUID } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { CATEGORIES, KEYWORD_DICTIONARY } from "../../shared/categories.js";
 import type {
   UserRow,
-  JobPostingRow,
-  JobCategoryStatRow,
-  JobSimilarityRow,
-  KeywordAlertRow,
-  DailyReportRow,
+  RecruitmentNewsRow,
+  CompanyInfoRow,
+  JobFairRow,
+  CompanyAlertRow,
+  DailyDigestRow,
   InterviewSessionRow,
   CreditTransactionRow
 } from "../../shared/types.js";
 
 interface Store {
   users: UserRow[];
-  jobPostings: JobPostingRow[];
-  jobCategoryStats: JobCategoryStatRow[];
-  jobSimilarity: JobSimilarityRow[];
-  keywordAlerts: KeywordAlertRow[];
-  dailyReports: DailyReportRow[];
+  recruitmentNews: RecruitmentNewsRow[];
+  companyInfo: CompanyInfoRow[];
+  jobFairs: JobFairRow[];
+  companyAlerts: CompanyAlertRow[];
+  dailyDigests: DailyDigestRow[];
   interviewSessions: InterviewSessionRow[];
   creditTransactions: CreditTransactionRow[];
   seeded: boolean;
 }
 
-const globalKey = "__jobtrend_mock_db__";
+const globalKey = "__jobtrend_mock_db_v3__";
 const g = globalThis as unknown as Record<string, Store | undefined>;
 
 function emptyStore(): Store {
   return {
     users: [],
-    jobPostings: [],
-    jobCategoryStats: [],
-    jobSimilarity: [],
-    keywordAlerts: [],
-    dailyReports: [],
+    recruitmentNews: [],
+    companyInfo: [],
+    jobFairs: [],
+    companyAlerts: [],
+    dailyDigests: [],
     interviewSessions: [],
     creditTransactions: [],
     seeded: false
@@ -62,85 +54,83 @@ function seededRandom(seed: number) {
 }
 
 const COMPANIES = ["네오테크", "브리지소프트", "한빛데이터", "스카이랩스", "그린플랫폼", "오로라컴퍼니", "파인트리", "메타베이스", "스텔라랩", "코어나인"];
-const EDUCATIONS = ["고졸", "학사", "석사", "무관"];
+const COMPANY_TYPES = ["대기업", "중견기업", "공공기관", "외국계기업", "벤처기업"];
+const TITLES = ["신입/경력 공개채용", "수시채용 공고", "하반기 정기채용", "경력직 채용", "인턴 채용"];
+const EMPLOYMENT_TYPE_SETS = [["정규직"], ["계약직", "기간제"], ["정규직", "정규직전환형"]];
+const AREAS = [
+  { code: "51", name: "서울, 강원" },
+  { code: "52", name: "부산, 경남" },
+  { code: "54", name: "경기, 인천" }
+];
 
-function seedJobPostings(store: Store) {
-  for (const [catIdx, category] of CATEGORIES.entries()) {
-    const rand = seededRandom(catIdx * 137 + 7);
-    const count = 18 + Math.floor(rand() * 14);
+function seedRecruitmentNews(store: Store) {
+  const rand = seededRandom(42);
+  for (let i = 0; i < 120; i++) {
+    const daysAgo = Math.floor(rand() * 14);
+    const postedAt = new Date();
+    postedAt.setDate(postedAt.getDate() - daysAgo);
+    const company = COMPANIES[Math.floor(rand() * COMPANIES.length)];
 
-    for (let i = 0; i < count; i++) {
-      const daysAgo = Math.floor(rand() * 30);
-      const postedAt = new Date();
-      postedAt.setDate(postedAt.getDate() - daysAgo);
-
-      const keywordCount = 3 + Math.floor(rand() * 4);
-      const shuffled = [...category.keywords].sort(() => rand() - 0.5);
-      const expMin = Math.floor(rand() * 6);
-      const expMax = expMin + Math.floor(rand() * 3);
-
-      store.jobPostings.push({
-        id: randomUUID(),
-        source: rand() > 0.5 ? "saramin" : "jobkorea",
-        external_id: `${category.name}-${i}`,
-        title: `${category.name} 채용`,
-        company: COMPANIES[Math.floor(rand() * COMPANIES.length)],
-        job_category: category.name,
-        region: ["서울", "경기", "인천", "부산", "대구", "원격근무"][Math.floor(rand() * 6)],
-        employment_type: "정규직",
-        experience_min: expMin,
-        experience_max: expMax,
-        education_level: EDUCATIONS[Math.floor(rand() * EDUCATIONS.length)],
-        salary_code: "6",
-        keywords: shuffled.slice(0, keywordCount),
-        raw_requirements: shuffled.slice(0, keywordCount).join(", "),
-        posting_url: `https://example.com/postings/${category.name}-${i}`,
-        posted_at: postedAt.toISOString().slice(0, 10),
-        collected_at: postedAt.toISOString()
-      });
-    }
+    store.recruitmentNews.push({
+      id: randomUUID(),
+      external_id: `mock-news-${i}`,
+      company_name: company,
+      title: `${company} ${TITLES[Math.floor(rand() * TITLES.length)]}`,
+      company_type: COMPANY_TYPES[Math.floor(rand() * COMPANY_TYPES.length)],
+      employment_types: EMPLOYMENT_TYPE_SETS[Math.floor(rand() * EMPLOYMENT_TYPE_SETS.length)],
+      posted_at: postedAt.toISOString().slice(0, 10),
+      closing_at: null,
+      logo_url: null,
+      posting_url: `https://example.com/news/${i}`,
+      collected_at: postedAt.toISOString()
+    });
   }
 }
 
-function computeStatsForDate(store: Store, dateStr: string) {
-  for (const category of CATEGORIES) {
-    const postings = store.jobPostings.filter(
-      (p) => p.job_category === category.name && p.posted_at <= dateStr
-    );
-    const freq = new Map<string, number>();
-    for (const p of postings) {
-      for (const k of p.keywords) freq.set(k, (freq.get(k) ?? 0) + 1);
-    }
-    for (const keyword of KEYWORD_DICTIONARY) {
-      const frequency = freq.get(keyword) ?? 0;
-      if (frequency === 0) continue;
-      const existing = store.jobCategoryStats.find(
-        (s) => s.job_category === category.name && s.keyword === keyword && s.period_date === dateStr
-      );
-      if (existing) {
-        existing.frequency = frequency;
-      } else {
-        store.jobCategoryStats.push({
-          id: randomUUID(),
-          job_category: category.name,
-          keyword,
-          frequency,
-          period_date: dateStr
-        });
-      }
-    }
+function seedCompanyInfo(store: Store) {
+  const rand = seededRandom(7);
+  for (const company of COMPANIES) {
+    store.companyInfo.push({
+      id: randomUUID(),
+      external_id: `mock-co-${company}`,
+      company_name: company,
+      company_type: COMPANY_TYPES[Math.floor(rand() * COMPANY_TYPES.length)],
+      business_no: null,
+      intro_summary: `${company} 소개`,
+      intro_detail: `${company}는 다양한 사업 영역에서 성장하고 있는 기업입니다.`,
+      homepage: null,
+      logo_url: null,
+      collected_at: new Date().toISOString()
+    });
   }
 }
 
-function seedStats(store: Store) {
-  for (let i = 0; i < 30; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - (29 - i));
-    computeStatsForDate(store, date.toISOString().slice(0, 10));
+function seedJobFairs(store: Store) {
+  const rand = seededRandom(99);
+  for (let i = 0; i < 6; i++) {
+    const daysOut = Math.floor(rand() * 30);
+    const start = new Date();
+    start.setDate(start.getDate() + daysOut);
+    const area = AREAS[Math.floor(rand() * AREAS.length)];
+
+    store.jobFairs.push({
+      id: randomUUID(),
+      external_id: `mock-fair-${i}`,
+      area_code: area.code,
+      area: area.name,
+      event_name: `${area.name} 채용박람회`,
+      event_term: `${start.toISOString().slice(0, 10)} ~ ${start.toISOString().slice(0, 10)}`,
+      start_date: start.toISOString().slice(0, 10),
+      event_place: `${area.name} 일자리센터`,
+      participating_companies: COMPANIES.slice(0, 3).join(", "),
+      contact_phone: "1350",
+      contact_email: null,
+      collected_at: new Date().toISOString()
+    });
   }
 }
 
-const FILE_PATH = join(tmpdir(), "jobtrend-mock-db.json");
+const FILE_PATH = join(tmpdir(), "jobtrend-mock-db-v3.json");
 
 function loadFromDisk(): Store | null {
   try {
@@ -161,8 +151,9 @@ function getStore(): Store {
   }
   const store = g[globalKey]!;
   if (!store.seeded) {
-    seedJobPostings(store);
-    seedStats(store);
+    seedRecruitmentNews(store);
+    seedCompanyInfo(store);
+    seedJobFairs(store);
     store.seeded = true;
     persistStore();
   }
@@ -173,48 +164,28 @@ export const db = {
   get users() {
     return getStore().users;
   },
-  get jobPostings() {
-    return getStore().jobPostings;
+  get recruitmentNews() {
+    return getStore().recruitmentNews;
   },
-  get jobCategoryStats() {
-    return getStore().jobCategoryStats;
+  get companyInfo() {
+    return getStore().companyInfo;
   },
-  get jobSimilarity() {
-    return getStore().jobSimilarity;
+  get jobFairs() {
+    return getStore().jobFairs;
   },
-  get keywordAlerts() {
-    return getStore().keywordAlerts;
+  get companyAlerts() {
+    return getStore().companyAlerts;
   },
-  get dailyReports() {
-    return getStore().dailyReports;
+  get dailyDigests() {
+    return getStore().dailyDigests;
   },
   get interviewSessions() {
     return getStore().interviewSessions;
   },
   get creditTransactions() {
     return getStore().creditTransactions;
-  },
-  recomputeStatsForToday() {
-    computeStatsForDate(getStore(), new Date().toISOString().slice(0, 10));
   }
 };
-
-export function recomputeStatsForDate(dateStr: string): void {
-  computeStatsForDate(getStore(), dateStr);
-}
-
-export function createUser(email: string, passwordHash: string | null): UserRow {
-  const user: UserRow = {
-    id: randomUUID(),
-    email,
-    password_hash: passwordHash,
-    plan_tier: "free",
-    interview_credits: 3,
-    created_at: new Date().toISOString()
-  };
-  db.users.push(user);
-  return user;
-}
 
 export function findOrCreateGuestUser(userId: string): UserRow {
   let user = db.users.find((u) => u.id === userId);

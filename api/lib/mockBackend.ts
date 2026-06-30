@@ -1,8 +1,7 @@
 import { randomUUID } from "crypto";
-import { db as store, findOrCreateGuestUser, recordCreditTransaction as recordTx, recomputeStatsForDate, persistStore } from "./mockDb.js";
-import { CATEGORIES } from "../../shared/categories.js";
-import type { Db, NewPosting } from "./dbTypes.js";
-import type { CreditTransactionRow, KeywordAlertRow, InterviewSessionRow } from "../../shared/types.js";
+import { db as store, findOrCreateGuestUser, recordCreditTransaction as recordTx, persistStore } from "./mockDb.js";
+import type { Db } from "./dbTypes.js";
+import type { CompanyAlertRow, InterviewSessionRow } from "../../shared/types.js";
 
 export const mockBackend: Db = {
   async getOrCreateUser(userId) {
@@ -26,96 +25,94 @@ export const mockBackend: Db = {
     recordTx(userId, type, amount, balanceAfter);
   },
 
-  async getPostingsSince(category, sinceDate) {
-    return store.jobPostings.filter((p) => p.job_category === category && p.posted_at >= sinceDate);
+  async listRecruitmentNews({ companyName, limit = 50 }) {
+    let rows = store.recruitmentNews;
+    if (companyName) rows = rows.filter((n) => n.company_name === companyName);
+    return [...rows].sort((a, b) => (b.posted_at ?? "").localeCompare(a.posted_at ?? "")).slice(0, limit);
   },
 
-  async getPostingsByDate(date) {
-    return store.jobPostings.filter((p) => p.posted_at === date);
+  async getRecruitmentNewsByDate(date) {
+    return store.recruitmentNews.filter((n) => n.posted_at === date);
   },
 
-  async insertPostingIfNew(posting: NewPosting) {
-    const exists = store.jobPostings.some((p) => p.source === posting.source && p.external_id === posting.external_id);
+  async insertNewsIfNew(news) {
+    const exists = store.recruitmentNews.some((n) => n.external_id === news.external_id);
     if (exists) return false;
-    store.jobPostings.push({ id: randomUUID(), collected_at: new Date().toISOString(), ...posting });
+    store.recruitmentNews.push({ id: randomUUID(), collected_at: new Date().toISOString(), ...news });
     return true;
   },
 
-  async countPostings() {
-    return store.jobPostings.length;
+  async countNews() {
+    return store.recruitmentNews.length;
   },
 
-  async getStatFrequency(keyword, jobCategory, date) {
-    return store.jobCategoryStats
-      .filter((s) => s.keyword === keyword && s.period_date === date && (!jobCategory || s.job_category === jobCategory))
-      .reduce((sum, s) => sum + s.frequency, 0);
+  async recentNewsTrend(days) {
+    const counts = new Map<string, number>();
+    for (const n of store.recruitmentNews) {
+      if (!n.posted_at) continue;
+      counts.set(n.posted_at, (counts.get(n.posted_at) ?? 0) + 1);
+    }
+    return Array.from({ length: days }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      const key = date.toISOString().slice(0, 10);
+      return { date: key, count: counts.get(key) ?? 0 };
+    });
   },
 
-  async recomputeStatsForDate(date) {
-    recomputeStatsForDate(date);
+  async getCompanyInfo(companyName) {
+    return store.companyInfo.find((c) => c.company_name === companyName) ?? null;
   },
 
-  async getLatestStatDate() {
-    return store.jobCategoryStats.reduce((max, s) => (s.period_date > max ? s.period_date : max), "") || null;
-  },
-
-  async getStatsForDate(date) {
-    return store.jobCategoryStats.filter((s) => s.period_date === date);
-  },
-
-  async getSimilarities(categoryA) {
-    return store.jobSimilarity.filter((s) => s.job_category_a === categoryA).sort((a, b) => b.similarity_score - a.similarity_score);
-  },
-
-  async hasAnySimilarity() {
-    return store.jobSimilarity.length > 0;
-  },
-
-  async upsertSimilarity(a, b, score, shared) {
-    const existing = store.jobSimilarity.find((s) => s.job_category_a === a && s.job_category_b === b);
+  async upsertCompanyInfo(info) {
+    const existing = store.companyInfo.find((c) => c.external_id === info.external_id);
     if (existing) {
-      existing.similarity_score = score;
-      existing.shared_keywords = shared;
-      existing.computed_at = new Date().toISOString();
+      Object.assign(existing, info);
     } else {
-      store.jobSimilarity.push({
-        id: randomUUID(),
-        job_category_a: a,
-        job_category_b: b,
-        similarity_score: score,
-        shared_keywords: shared,
-        computed_at: new Date().toISOString()
-      });
+      store.companyInfo.push({ id: randomUUID(), collected_at: new Date().toISOString(), ...info });
     }
   },
 
-  async listActiveAlerts(userId) {
-    return store.keywordAlerts.filter((a) => a.user_id === userId && a.active);
+  async listJobFairs() {
+    return [...store.jobFairs].sort((a, b) => (a.start_date ?? "").localeCompare(b.start_date ?? ""));
   },
 
-  async countActiveAlerts(userId) {
-    return store.keywordAlerts.filter((a) => a.user_id === userId && a.active).length;
+  async upsertJobFair(fair) {
+    const existing = store.jobFairs.find((f) => f.external_id === fair.external_id);
+    if (existing) {
+      Object.assign(existing, fair);
+    } else {
+      store.jobFairs.push({ id: randomUUID(), collected_at: new Date().toISOString(), ...fair });
+    }
   },
 
-  async createAlert(row) {
-    const alert: KeywordAlertRow = { id: randomUUID(), created_at: new Date().toISOString(), ...row };
-    store.keywordAlerts.push(alert);
+  async listActiveCompanyAlerts(userId) {
+    return store.companyAlerts.filter((a) => a.user_id === userId && a.active);
+  },
+
+  async countActiveCompanyAlerts(userId) {
+    return store.companyAlerts.filter((a) => a.user_id === userId && a.active).length;
+  },
+
+  async createCompanyAlert(row) {
+    const alert: CompanyAlertRow = { id: randomUUID(), created_at: new Date().toISOString(), ...row };
+    store.companyAlerts.push(alert);
     return alert;
   },
 
-  async deactivateAlert(id, userId) {
-    const alert = store.keywordAlerts.find((a) => a.id === id && a.user_id === userId);
+  async deactivateCompanyAlert(id, userId) {
+    const alert = store.companyAlerts.find((a) => a.id === id && a.user_id === userId);
     if (!alert) return false;
     alert.active = false;
     return true;
   },
 
-  async upsertDailyReport(userId, date, content) {
-    const existing = store.dailyReports.find((r) => r.user_id === userId && r.report_date === date);
+  async upsertDailyDigest(userId, date, content) {
+    const existing = store.dailyDigests.find((d) => d.user_id === userId && d.digest_date === date);
     if (existing) {
       existing.content_json = content;
     } else {
-      store.dailyReports.push({ id: randomUUID(), user_id: userId, report_date: date, content_json: content, sent_at: null });
+      store.dailyDigests.push({ id: randomUUID(), user_id: userId, digest_date: date, content_json: content, sent_at: null });
     }
   },
 
@@ -133,7 +130,4 @@ export const mockBackend: Db = {
   }
 };
 
-// Re-exported so api/lib/respond.ts can persist after every request without
-// caring which backend is active (the Neon backend is a no-op here).
 export { persistStore };
-export const ALL_CATEGORY_NAMES = CATEGORIES.map((c) => c.name);

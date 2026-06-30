@@ -1,7 +1,13 @@
--- JobTrend schema (Neon DB / PostgreSQL)
--- Mirrors the implementation-grade spec. External Open API field mapping
--- (사람인/잡코리아) happens last — see api/lib/normalizers.ts and
--- api/lib/categoryMap.ts, which are already written against this schema.
+-- JobTrend schema (Neon DB / PostgreSQL) — v3.0
+-- Redesigned around the 3 고용24 Open API services an individual account
+-- can call (채용행사/공채속보/공채기업정보). See api/lib/normalizers.ts for
+-- the wantedRoot -> row mapping (all 3 field sets are now confirmed against
+-- live API responses, not guessed).
+--
+-- Note: v1/v2 tables (job_postings, job_category_stats, job_similarity,
+-- keyword_alerts, daily_reports) may still exist from earlier iterations.
+-- They're orphaned, not referenced by any route, and safe to ignore/drop
+-- manually later — left in place here to avoid a destructive migration.
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -12,74 +18,79 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS job_postings (
+-- 공채속보 (210L21)
+CREATE TABLE IF NOT EXISTS recruitment_news (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source VARCHAR(20) NOT NULL,              -- 'work24' | 'saramin' | 'jobkorea'
-  external_id VARCHAR(100) NOT NULL,
+  external_id VARCHAR(100) NOT NULL UNIQUE,
+  company_name VARCHAR(255) NOT NULL,
   title VARCHAR(255) NOT NULL,
-  company VARCHAR(255),
-  job_category VARCHAR(100) NOT NULL,
-  region VARCHAR(100),
-  employment_type VARCHAR(50),
-  experience_min INT,
-  experience_max INT,
-  education_level VARCHAR(50),
-  salary_code VARCHAR(50),
-  keywords TEXT[],
-  raw_requirements TEXT,
-  posting_url TEXT,
+  company_type VARCHAR(50),
+  employment_types TEXT[],
   posted_at DATE,
-  collected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(source, external_id)
+  closing_at DATE,
+  logo_url TEXT,
+  posting_url TEXT,
+  collected_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_postings_category ON job_postings(job_category);
-CREATE INDEX IF NOT EXISTS idx_postings_collected ON job_postings(collected_at);
+CREATE INDEX IF NOT EXISTS idx_news_company ON recruitment_news(company_name);
+CREATE INDEX IF NOT EXISTS idx_news_collected ON recruitment_news(collected_at);
 
-CREATE TABLE IF NOT EXISTS job_category_stats (
+-- 공채기업정보 (210L31)
+CREATE TABLE IF NOT EXISTS company_info (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_category VARCHAR(100) NOT NULL,
-  keyword VARCHAR(100) NOT NULL,
-  frequency INT NOT NULL DEFAULT 0,
-  period_date DATE NOT NULL,
-  UNIQUE(job_category, keyword, period_date)
+  external_id VARCHAR(100) NOT NULL UNIQUE,
+  company_name VARCHAR(255) NOT NULL,
+  company_type VARCHAR(50),
+  business_no VARCHAR(50),
+  intro_summary TEXT,
+  intro_detail TEXT,
+  homepage TEXT,
+  logo_url TEXT,
+  collected_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_stats_category_date ON job_category_stats(job_category, period_date);
+CREATE INDEX IF NOT EXISTS idx_company_info_name ON company_info(company_name);
 
-CREATE TABLE IF NOT EXISTS job_similarity (
+-- 채용행사 (210L11/210D11)
+CREATE TABLE IF NOT EXISTS job_fairs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_category_a VARCHAR(100) NOT NULL,
-  job_category_b VARCHAR(100) NOT NULL,
-  similarity_score NUMERIC(5,4) NOT NULL,
-  shared_keywords TEXT[],
-  computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(job_category_a, job_category_b)
+  external_id VARCHAR(100) NOT NULL UNIQUE,
+  area_code VARCHAR(10),
+  area VARCHAR(100),
+  event_name VARCHAR(255) NOT NULL,
+  event_term VARCHAR(100),
+  start_date DATE,
+  event_place VARCHAR(255),
+  participating_companies TEXT,
+  contact_phone VARCHAR(50),
+  contact_email VARCHAR(100),
+  collected_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS idx_fairs_date ON job_fairs(start_date);
 
-CREATE TABLE IF NOT EXISTS keyword_alerts (
+CREATE TABLE IF NOT EXISTS company_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  keyword VARCHAR(100) NOT NULL,
-  job_category VARCHAR(100),
-  region VARCHAR(100),
+  company_name VARCHAR(255) NOT NULL,
   channel VARCHAR(20) NOT NULL DEFAULT 'email',
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_alerts_user ON keyword_alerts(user_id);
+CREATE INDEX IF NOT EXISTS idx_company_alerts_user ON company_alerts(user_id);
 
-CREATE TABLE IF NOT EXISTS daily_reports (
+CREATE TABLE IF NOT EXISTS daily_digests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  report_date DATE NOT NULL,
+  digest_date DATE NOT NULL,
   content_json JSONB NOT NULL,
   sent_at TIMESTAMPTZ,
-  UNIQUE(user_id, report_date)
+  UNIQUE(user_id, digest_date)
 );
 
+-- F4 — unchanged in spirit, job_category dropped (user pastes JD directly,
+-- no taxonomy needed without job_postings to derive one from).
 CREATE TABLE IF NOT EXISTS interview_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  job_category VARCHAR(100),
   jd_text TEXT NOT NULL,
   resume_text TEXT,
   questions_json JSONB NOT NULL,
@@ -92,7 +103,7 @@ CREATE TABLE IF NOT EXISTS interview_sessions (
 CREATE TABLE IF NOT EXISTS credit_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type VARCHAR(20) NOT NULL,                -- 'charge' | 'consume' | 'monthly_grant'
+  type VARCHAR(20) NOT NULL,
   amount INT NOT NULL,
   balance_after INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

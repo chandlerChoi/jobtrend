@@ -1,5 +1,7 @@
-// Row shapes mirror db/schema.sql exactly so mockDb and the real Neon client
-// (once wired) are interchangeable from the API layer's point of view.
+// v3.0 — redesigned around the 3 work24 Open API services an individual
+// account can actually call (채용행사/공채속보/공채기업정보). Row shapes
+// mirror db/schema.sql exactly so mockBackend and neonBackend are
+// interchangeable from the API layer's point of view.
 
 export interface UserRow {
   id: string;
@@ -10,79 +12,74 @@ export interface UserRow {
   created_at: string;
 }
 
-export interface JobPostingRow {
+// 공채속보 (210L21) — newly-registered recruitment postings, headline-only
+// (no requirements/salary/experience — that's the gap this whole redesign
+// works around).
+export interface RecruitmentNewsRow {
   id: string;
-  source: "saramin" | "jobkorea" | "work24";
   external_id: string;
+  company_name: string;
   title: string;
-  company: string | null;
-  job_category: string;
-  region: string | null;
-  employment_type: string | null;
-  experience_min: number | null;
-  experience_max: number | null;
-  education_level: string | null;
-  salary_code: string | null;
-  keywords: string[];
-  raw_requirements: string | null;
+  company_type: string | null;
+  employment_types: string[];
+  posted_at: string | null;
+  closing_at: string | null;
+  logo_url: string | null;
   posting_url: string | null;
-  posted_at: string;
   collected_at: string;
 }
 
-export interface JobCategoryStatRow {
+// 공채기업정보 (210L31) — company profile data, joined onto news by name
+// since neither service shares a common id.
+export interface CompanyInfoRow {
   id: string;
-  job_category: string;
-  keyword: string;
-  frequency: number;
-  period_date: string;
+  external_id: string;
+  company_name: string;
+  company_type: string | null;
+  business_no: string | null;
+  intro_summary: string | null;
+  intro_detail: string | null;
+  homepage: string | null;
+  logo_url: string | null;
+  collected_at: string;
 }
 
-export interface JobSimilarityRow {
+// 채용행사 (210L11/210D11) — job fair / hiring event calendar.
+export interface JobFairRow {
   id: string;
-  job_category_a: string;
-  job_category_b: string;
-  similarity_score: number;
-  shared_keywords: string[];
-  computed_at: string;
+  external_id: string;
+  area_code: string | null;
+  area: string | null;
+  event_name: string;
+  event_term: string | null;
+  start_date: string | null;
+  event_place: string | null;
+  participating_companies: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  collected_at: string;
 }
 
-export interface KeywordAlertRow {
+export interface CompanyAlertRow {
   id: string;
   user_id: string;
-  keyword: string;
-  job_category: string | null;
-  region: string | null;
+  company_name: string;
   channel: "email" | "push";
   active: boolean;
   created_at: string;
 }
 
-export interface DailyReportRow {
-  id: string;
-  user_id: string;
-  report_date: string;
-  content_json: DailyReportContent;
-  sent_at: string | null;
-}
-
-export interface DailyReportContent {
+export interface DailyDigestContent {
   date: string;
-  highlights: { keyword: string; changeType: "frequency_spike" | "frequency_drop" | "new_posting"; delta: string }[];
-  newPostings: { title: string; company: string | null; postingUrl: string | null }[];
+  newPostingsByCompany: { companyName: string; title: string; postingUrl: string | null }[];
 }
 
-export interface InterviewSessionRow {
+export interface DailyDigestRow {
   id: string;
   user_id: string;
-  job_category: string | null;
-  jd_text: string;
-  resume_text: string | null;
-  questions_json: InterviewQuestion[];
-  answers_json: InterviewAnswer[];
-  feedback_json: InterviewSummary | null;
-  status: "questions_generated" | "answering" | "completed";
-  created_at: string;
+  digest_date: string;
+  content_json: DailyDigestContent;
+  sent_at: string | null;
 }
 
 export interface InterviewQuestion {
@@ -102,6 +99,18 @@ export interface InterviewSummary {
   averageScore: number;
   overallStrengths: string[];
   overallImprovements: string[];
+}
+
+export interface InterviewSessionRow {
+  id: string;
+  user_id: string;
+  jd_text: string;
+  resume_text: string | null;
+  questions_json: InterviewQuestion[];
+  answers_json: InterviewAnswer[];
+  feedback_json: InterviewSummary | null;
+  status: "questions_generated" | "answering" | "completed";
+  created_at: string;
 }
 
 export interface CreditTransactionRow {

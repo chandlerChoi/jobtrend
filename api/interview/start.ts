@@ -12,7 +12,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   }
 
   const user = await requireUser(req);
-  const { jdText, resumeText, jobCategory } = req.body ?? {};
+  const { jdText, resumeText } = req.body ?? {};
 
   if (!jdText) {
     res.status(400).json({ error: "jdText required" });
@@ -36,7 +36,6 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   const session = {
     id: randomUUID(),
     user_id: user.id,
-    job_category: jobCategory ?? null,
     jd_text: jdText,
     resume_text: resumeText ?? null,
     questions_json: questions,
