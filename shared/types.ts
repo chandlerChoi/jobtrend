@@ -12,7 +12,7 @@ export interface UserRow {
 
 export interface JobPostingRow {
   id: string;
-  source: "saramin" | "jobkorea";
+  source: "saramin" | "jobkorea" | "work24";
   external_id: string;
   title: string;
   company: string | null;

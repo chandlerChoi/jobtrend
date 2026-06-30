@@ -4,7 +4,7 @@
 // Both functions return JobPostingRow-shaped objects (minus id/collected_at)
 // so api/cron/collect-postings.ts can insert them directly once live.
 import { extractKeywordsFromText } from "./keywordExtractor.js";
-import { mapJobKoreaCategory } from "./categoryMap.js";
+import { mapJobKoreaCategory, mapWork24Category } from "./categoryMap.js";
 import type { JobPostingRow } from "../../shared/types.js";
 
 type NewPosting = Omit<JobPostingRow, "id" | "collected_at">;
@@ -93,3 +93,56 @@ export function normalizeJobKoreaJob(rawJob: JobKoreaJob): NewPosting {
     posted_at: new Date().toISOString().slice(0, 10)
   };
 }
+
+// 고용24(워크넷) Open API — primary source now that 사람인/잡코리아 approval
+// isn't viable before the demo deadline. Field names below are a best guess
+// from the public 워크넷 Open API guide (JSON mode, wantedApi.do) and need a
+// one-time check against a real response — see the checklist at the bottom
+// of 잡트렌드 - 상세 기술명세서(구현용).txt §부록.
+interface Work24Job {
+  wantedAuthNo: string | number;
+  title: string;
+  busplaName: string;
+  jobsCdNm: string;
+  region: string;
+  education?: string;
+  career?: string;
+  salTpNm?: string;
+  jobsCont?: string;
+  wantedInfoUrl: string;
+  regDt?: string;
+}
+
+export function normalizeWork24Job(rawJob: Work24Job): NewPosting {
+  const { min, max } = parseExperienceRange(rawJob.career ?? "");
+  return {
+    source: "work24",
+    external_id: String(rawJob.wantedAuthNo),
+    title: rawJob.title,
+    company: rawJob.busplaName ?? null,
+    job_category: mapWork24Category(rawJob.jobsCdNm),
+    region: rawJob.region ?? null,
+    employment_type: rawJob.salTpNm ?? null,
+    experience_min: min,
+    experience_max: max,
+    education_level: rawJob.education ?? null,
+    salary_code: null,
+    keywords: extractKeywordsFromText(rawJob.jobsCont ?? ""),
+    raw_requirements: rawJob.jobsCont ?? null,
+    posting_url: rawJob.wantedInfoUrl,
+    posted_at: (rawJob.regDt ?? new Date().toISOString()).slice(0, 10)
+  };
+}
+
+async function fetchWork24Jobs(jobsCd: string, page = 1): Promise<NewPosting[]> {
+  const url =
+    `http://openapi.work.go.kr/opi/opi/opia/wantedApi.do` +
+    `?authKey=${process.env.WORK24_API_KEY}&callTp=L&returnType=JSON` +
+    `&startPage=${page}&display=100&jobsCd=${jobsCd}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const jobs: Work24Job[] = data.wantedRoot?.wanted ?? [];
+  return jobs.map(normalizeWork24Job);
+}
+
+export { fetchWork24Jobs };

@@ -14,7 +14,7 @@ CREATE TABLE users (
 
 CREATE TABLE job_postings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source VARCHAR(20) NOT NULL,              -- 'saramin' | 'jobkorea'
+  source VARCHAR(20) NOT NULL,              -- 'work24' | 'saramin' | 'jobkorea'
   external_id VARCHAR(100) NOT NULL,
   title VARCHAR(255) NOT NULL,
   company VARCHAR(255),
