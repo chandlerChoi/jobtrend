@@ -12,7 +12,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   }
 
   const user = await requireUser(req);
-  const { jdText, resumeText } = req.body ?? {};
+  const { jdText, resumeText, persona } = req.body ?? {};
 
   if (!jdText) {
     res.status(400).json({ error: "jdText required" });
@@ -24,7 +24,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  const questions = await generateInterviewQuestions(jdText, resumeText ?? null);
+  const questions = await generateInterviewQuestions(jdText, resumeText ?? null, 5, persona ?? "startup");
 
   const remaining = await db.decrementCredit(user.id);
   if (remaining < 0) {
@@ -36,6 +36,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   const session = {
     id: randomUUID(),
     user_id: user.id,
+    persona_type: persona ?? "startup",
     jd_text: jdText,
     resume_text: resumeText ?? null,
     questions_json: questions,

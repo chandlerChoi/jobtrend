@@ -39,5 +39,18 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
+  // DELETE /api/alerts/:id — merged from alerts/[id].ts
+  if (req.method === "DELETE") {
+    const id = String(req.query.id ?? "");
+    if (!id || id === "undefined") {
+      res.status(400).json({ error: "id required" });
+      return;
+    }
+    const ok = await db.deactivateCompanyAlert(id, user.id);
+    if (!ok) { res.status(404).json({ error: "not_found" }); return; }
+    res.status(200).json({ ok: true });
+    return;
+  }
+
   res.status(405).json({ error: "method_not_allowed" });
 });

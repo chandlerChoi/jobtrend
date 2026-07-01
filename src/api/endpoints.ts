@@ -2,23 +2,35 @@ import { apiFetch } from "./client";
 import type {
   InterviewQuestion,
   InterviewSummary,
-  CompanyAlertRow,
-  DailyDigestContent,
   RecruitmentNewsRow,
   CompanyInfoRow,
   JobFairRow
 } from "../../shared/types";
 
-export interface NewsFeedResponse {
+export interface TrendResponse {
   news: RecruitmentNewsRow[];
   trend: { date: string; count: number }[];
   total: number;
+  insight: string | null;
+  insightCachedAt: string | null;
   lastUpdated: string;
 }
 
-export function getNewsFeed(companyName?: string, limit = 50) {
-  const q = new URLSearchParams({ limit: String(limit), ...(companyName ? { company: companyName } : {}) });
-  return apiFetch<NewsFeedResponse>(`/news?${q}`);
+export function getTrends(params?: { industry?: string; size?: string; region?: string; limit?: number }) {
+  const q = new URLSearchParams();
+  if (params?.industry) q.set("industry", params.industry);
+  if (params?.size) q.set("size", params.size);
+  if (params?.region) q.set("region", params.region);
+  if (params?.limit) q.set("limit", String(params.limit));
+  return apiFetch<TrendResponse>(`/trends?${q}`);
+}
+
+export interface NewsSummaryResponse {
+  summary: { requirements: string[]; preferred: string[]; interviewType: string[]; };
+}
+
+export function getNewsSummary(newsId: string) {
+  return apiFetch<NewsSummaryResponse>(`/news/${newsId}/summary`);
 }
 
 export interface CompanyResponse {
@@ -30,25 +42,16 @@ export function getCompany(companyName: string) {
   return apiFetch<CompanyResponse>(`/companies/${encodeURIComponent(companyName)}`);
 }
 
+// Legacy stubs — kept for hooks that still import them
+export type NewsFeedResponse = TrendResponse;
+export const getNewsFeed = (companyName?: string) => getTrends({ limit: 50 });
+export const listAlerts = () => apiFetch<{ alerts: never[] }>("/alerts");
+export const createAlert = (_p: unknown) => Promise.resolve({ alert: null });
+export const deleteAlert = (id: string) => apiFetch<void>(`/alerts?id=${id}`, { method: "DELETE" });
+export const getDailyDigest = (_date?: string) => Promise.resolve(null);
+
 export function listJobFairs() {
   return apiFetch<{ fairs: JobFairRow[] }>("/job-fairs");
-}
-
-export function listAlerts() {
-  return apiFetch<{ alerts: CompanyAlertRow[] }>("/alerts");
-}
-
-export function createAlert(payload: { companyName: string; channel: "email" | "push" }) {
-  return apiFetch<{ alert: CompanyAlertRow }>("/alerts", { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function deleteAlert(id: string) {
-  return apiFetch<void>(`/alerts/${id}`, { method: "DELETE" });
-}
-
-export function getDailyDigest(date?: string) {
-  const q = date ? `?date=${date}` : "";
-  return apiFetch<DailyDigestContent>(`/digest/daily${q}`);
 }
 
 export interface StartInterviewResponse {
@@ -57,12 +60,12 @@ export interface StartInterviewResponse {
   creditsRemaining: number;
 }
 
-export function startInterview(payload: { jdText: string; resumeText?: string }) {
+export function startInterview(payload: { jdText: string; resumeText?: string; persona?: string }) {
   return apiFetch<StartInterviewResponse>("/interview/start", { method: "POST", body: JSON.stringify(payload) });
 }
 
 export interface AnswerResponse {
-  feedback: { strengths: string[]; improvements: string[] };
+  feedback: { strengths: string[]; improvements: string[]; quickTip?: string };
   nextQuestionId: number | null;
 }
 
