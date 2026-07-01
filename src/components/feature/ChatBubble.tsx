@@ -8,8 +8,10 @@ export default function ChatBubble({ role, children }: ChatBubbleProps) {
   return (
     <div className={`flex ${isInterviewer ? "justify-start" : "justify-end"}`}>
       <div
-        className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${
-          isInterviewer ? "bg-white/10 text-white" : "bg-brand-500 text-white"
+        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+          isInterviewer
+            ? "bg-gray-100 text-gray-800 rounded-tl-sm"
+            : "bg-brand-500 text-white rounded-tr-sm"
         }`}
       >
         {children}
