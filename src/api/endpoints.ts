@@ -121,3 +121,29 @@ export function continueStoryMining(sessionId: string, answer: string) {
 export function listStoryCards() {
   return apiFetch<{ cards: StoryCardRow[] }>("/story-bank");
 }
+
+export interface ActiveMiningSession {
+  sessionId: string;
+  slotIndex: number;
+  slotName: string | null;
+  transcript: { slotId: string; question: string; answer: string }[];
+}
+
+export function getActiveStoryMiningSession() {
+  return apiFetch<{ session: ActiveMiningSession | null }>("/story-bank?active=1");
+}
+
+export function listBookmarks() {
+  return apiFetch<{ news: RecruitmentNewsRow[]; ids: string[] }>("/bookmarks");
+}
+
+export function addBookmark(newsId: string) {
+  return apiFetch<{ bookmark: unknown }>("/bookmarks", {
+    method: "POST",
+    body: JSON.stringify({ newsId })
+  });
+}
+
+export function removeBookmark(newsId: string) {
+  return apiFetch<{ removed: boolean }>(`/bookmarks?newsId=${newsId}`, { method: "DELETE" });
+}

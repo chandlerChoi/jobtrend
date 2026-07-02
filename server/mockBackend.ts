@@ -173,6 +173,13 @@ export const mockBackend: Db = {
     return store.storyMiningSessions.find((s) => s.id === id && s.user_id === userId) ?? null;
   },
 
+  async getActiveMiningSession(userId) {
+    const actives = store.storyMiningSessions
+      .filter((s) => s.user_id === userId && s.status === "in_progress")
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    return actives[0] ?? null;
+  },
+
   async updateMiningSession(session) {
     const idx = store.storyMiningSessions.findIndex((s) => s.id === session.id);
     if (idx >= 0) store.storyMiningSessions[idx] = session;
@@ -186,6 +193,30 @@ export const mockBackend: Db = {
 
   async listStoryCards(userId) {
     return store.storyCards.filter((c) => c.user_id === userId);
+  },
+
+  async addBookmark(userId, newsId) {
+    const existing = store.bookmarks.find((b) => b.user_id === userId && b.news_id === newsId);
+    if (existing) return existing;
+    const bookmark = { id: randomUUID(), user_id: userId, news_id: newsId, created_at: new Date().toISOString() };
+    store.bookmarks.push(bookmark);
+    return bookmark;
+  },
+
+  async removeBookmark(userId, newsId) {
+    const idx = store.bookmarks.findIndex((b) => b.user_id === userId && b.news_id === newsId);
+    if (idx < 0) return false;
+    store.bookmarks.splice(idx, 1);
+    return true;
+  },
+
+  async listBookmarkedNews(userId) {
+    const ids = new Set(store.bookmarks.filter((b) => b.user_id === userId).map((b) => b.news_id));
+    return store.recruitmentNews.filter((n) => ids.has(n.id));
+  },
+
+  async listBookmarkedNewsIds(userId) {
+    return store.bookmarks.filter((b) => b.user_id === userId).map((b) => b.news_id);
   }
 };
 

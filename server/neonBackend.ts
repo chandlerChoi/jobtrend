@@ -264,8 +264,8 @@ export const neonBackend: Db = {
   async createMiningSession(row) {
     const sql = client();
     await sql`
-      INSERT INTO story_mining_sessions (id, user_id, slot_index, slot_state, status)
-      VALUES (${row.id}, ${row.user_id}, ${row.slot_index}, ${JSON.stringify(row.slot_state)}, ${row.status})
+      INSERT INTO story_mining_sessions (id, user_id, slot_index, slot_state, transcript, status)
+      VALUES (${row.id}, ${row.user_id}, ${row.slot_index}, ${JSON.stringify(row.slot_state)}, ${JSON.stringify(row.transcript)}, ${row.status})
     `;
   },
 
@@ -277,12 +277,24 @@ export const neonBackend: Db = {
     return (rows[0] as any) ?? null;
   },
 
+  async getActiveMiningSession(userId) {
+    const sql = client();
+    const rows = await sql`
+      SELECT * FROM story_mining_sessions
+      WHERE user_id = ${userId} AND status = 'in_progress'
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `;
+    return (rows[0] as any) ?? null;
+  },
+
   async updateMiningSession(session) {
     const sql = client();
     await sql`
       UPDATE story_mining_sessions SET
         slot_index = ${session.slot_index},
         slot_state = ${JSON.stringify(session.slot_state)},
+        transcript = ${JSON.stringify(session.transcript)},
         status = ${session.status},
         updated_at = now()
       WHERE id = ${session.id}
@@ -308,5 +320,41 @@ export const neonBackend: Db = {
       SELECT * FROM story_cards WHERE user_id = ${userId} ORDER BY created_at ASC
     `;
     return rows as any;
+  },
+
+  async addBookmark(userId, newsId) {
+    const sql = client();
+    const rows = await sql`
+      INSERT INTO bookmarks (user_id, news_id)
+      VALUES (${userId}, ${newsId})
+      ON CONFLICT (user_id, news_id) DO UPDATE SET news_id = bookmarks.news_id
+      RETURNING *
+    `;
+    return rows[0] as any;
+  },
+
+  async removeBookmark(userId, newsId) {
+    const sql = client();
+    const rows = await sql`
+      DELETE FROM bookmarks WHERE user_id = ${userId} AND news_id = ${newsId} RETURNING id
+    `;
+    return rows.length > 0;
+  },
+
+  async listBookmarkedNews(userId) {
+    const sql = client();
+    const rows = await sql`
+      SELECT n.* FROM recruitment_news n
+      JOIN bookmarks b ON b.news_id = n.id
+      WHERE b.user_id = ${userId}
+      ORDER BY b.created_at DESC
+    `;
+    return rows as any;
+  },
+
+  async listBookmarkedNewsIds(userId) {
+    const sql = client();
+    const rows = await sql`SELECT news_id FROM bookmarks WHERE user_id = ${userId}`;
+    return (rows as any[]).map((r) => r.news_id);
   }
 };

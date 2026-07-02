@@ -15,7 +15,8 @@ import type {
   InterviewSessionRow,
   CreditTransactionRow,
   StoryMiningSessionRow,
-  StoryCardRow
+  StoryCardRow,
+  BookmarkRow
 } from "../shared/types.js";
 
 interface Store {
@@ -29,6 +30,7 @@ interface Store {
   creditTransactions: CreditTransactionRow[];
   storyMiningSessions: StoryMiningSessionRow[];
   storyCards: StoryCardRow[];
+  bookmarks: BookmarkRow[];
   seeded: boolean;
 }
 
@@ -47,6 +49,7 @@ function emptyStore(): Store {
     creditTransactions: [],
     storyMiningSessions: [],
     storyCards: [],
+    bookmarks: [],
     seeded: false
   };
 }
@@ -196,6 +199,12 @@ export const db = {
   },
   get storyCards() {
     return getStore().storyCards;
+  },
+  get bookmarks() {
+    // Older persisted stores predate this field.
+    const store = getStore();
+    if (!store.bookmarks) store.bookmarks = [];
+    return store.bookmarks;
   }
 };
 

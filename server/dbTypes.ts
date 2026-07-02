@@ -12,7 +12,8 @@ import type {
   InterviewSessionRow,
   CreditTransactionRow,
   StoryMiningSessionRow,
-  StoryCardRow
+  StoryCardRow,
+  BookmarkRow
 } from "../shared/types.js";
 
 export type NewNews = Omit<RecruitmentNewsRow, "id" | "collected_at">;
@@ -62,7 +63,13 @@ export interface Db {
 
   createMiningSession(row: StoryMiningSessionRow): Promise<void>;
   getMiningSession(id: string, userId: string): Promise<StoryMiningSessionRow | null>;
+  getActiveMiningSession(userId: string): Promise<StoryMiningSessionRow | null>;
   updateMiningSession(session: StoryMiningSessionRow): Promise<void>;
   createStoryCard(row: Omit<StoryCardRow, "id" | "created_at">): Promise<StoryCardRow>;
   listStoryCards(userId: string): Promise<StoryCardRow[]>;
+
+  addBookmark(userId: string, newsId: string): Promise<BookmarkRow>;
+  removeBookmark(userId: string, newsId: string): Promise<boolean>;
+  listBookmarkedNews(userId: string): Promise<RecruitmentNewsRow[]>;
+  listBookmarkedNewsIds(userId: string): Promise<string[]>;
 }

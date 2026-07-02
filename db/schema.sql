@@ -117,10 +117,14 @@ CREATE TABLE IF NOT EXISTS story_mining_sessions (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   slot_index INT NOT NULL DEFAULT 0,
   slot_state JSONB NOT NULL,
+  -- Full ordered question/answer log across all slots, so a refresh or
+  -- later visit can rebuild the chat and resume mid-interview.
+  transcript JSONB NOT NULL DEFAULT '[]',
   status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE story_mining_sessions ADD COLUMN IF NOT EXISTS transcript JSONB NOT NULL DEFAULT '[]';
 CREATE INDEX IF NOT EXISTS idx_story_mining_user ON story_mining_sessions(user_id);
 
 -- One row per completed (or abandoned) slot. modules_filled + raw_answers
@@ -137,3 +141,13 @@ CREATE TABLE IF NOT EXISTS story_cards (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_story_cards_user ON story_cards(user_id);
+
+-- 즐겨찾기 — a user pins a recruitment_news row to revisit later.
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  news_id UUID NOT NULL REFERENCES recruitment_news(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, news_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);

@@ -101,6 +101,14 @@ export default function InterviewSessionPage() {
 
       {!isComplete && currentQuestion && (
         <div className="space-y-3">
+          {currentQuestion.storyHint && (
+            <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
+              <p className="text-xs font-semibold text-brand-600 mb-1">
+                💡 참고할 스토리 — {currentQuestion.storyHint.slotName}
+              </p>
+              <p className="text-sm text-gray-600 leading-relaxed">{currentQuestion.storyHint.snippet}</p>
+            </div>
+          )}
           <div className="relative">
             <textarea
               value={answerText}

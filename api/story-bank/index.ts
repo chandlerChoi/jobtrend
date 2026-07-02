@@ -15,10 +15,29 @@ import {
 // POST /api/story-bank — drives the 10-slot mining interview one turn at a
 // time: { } starts a session, { sessionId, answer } advances it.
 // GET  /api/story-bank — lists the user's completed/incomplete story cards.
+// GET  /api/story-bank?active=1 — returns the in-progress session (with
+// full transcript) so the client can resume where the user left off.
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   const user = await requireUser(req);
 
   if (req.method === "GET") {
+    if (req.query.active) {
+      const session = await db.getActiveMiningSession(user.id);
+      if (!session) {
+        res.status(200).json({ session: null });
+        return;
+      }
+      const slotId = slotIdAt(session.slot_index);
+      res.status(200).json({
+        session: {
+          sessionId: session.id,
+          slotIndex: session.slot_index,
+          slotName: slotId ? nameFor(slotId) : null,
+          transcript: session.transcript ?? []
+        }
+      });
+      return;
+    }
     const cards = await db.listStoryCards(user.id);
     res.status(200).json({ cards });
     return;
@@ -31,24 +50,29 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
 
   const { sessionId, answer } = (req.body ?? {}) as { sessionId?: string; answer?: string };
 
-  // Start a new session at slot S01.
+  // Start a new session at slot S01. Transcript entries are appended
+  // when a question is issued (answer: "") and filled in when the user
+  // replies, so the trailing unanswered entry is always "the current
+  // question" on resume.
   if (!sessionId) {
+    const firstSlotId = slotIdAt(0)!;
+    const firstQuestion = openingFor(firstSlotId);
     const session = {
       id: randomUUID(),
       user_id: user.id,
       slot_index: 0,
       slot_state: newSlotState(),
+      transcript: [{ slotId: firstSlotId, question: firstQuestion, answer: "" }],
       status: "in_progress" as const,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     await db.createMiningSession(session);
-    const slotId = slotIdAt(0)!;
     res.status(201).json({
       sessionId: session.id,
       slotIndex: 0,
-      slotName: nameFor(slotId),
-      question: openingFor(slotId),
+      slotName: nameFor(firstSlotId),
+      question: firstQuestion,
       done: false
     });
     return;
@@ -72,20 +96,30 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
 
   // Resuming without a new answer — just re-send the current question.
   if (!answer) {
+    const pending = (session.transcript ?? []).slice(-1)[0];
     res.status(200).json({
       sessionId: session.id,
       slotIndex: session.slot_index,
       slotName: nameFor(slotId),
-      question: openingFor(slotId),
+      question: pending && !pending.answer ? pending.question : openingFor(slotId),
       done: false
     });
     return;
+  }
+
+  session.transcript = session.transcript ?? [];
+  const trailing = session.transcript[session.transcript.length - 1];
+  if (trailing && !trailing.answer) {
+    trailing.answer = answer;
+  } else {
+    session.transcript.push({ slotId, question: "", answer });
   }
 
   const result = stepSlot(slotId, session.slot_state, answer);
 
   if (result.status === "asking") {
     session.slot_state = result.state;
+    session.transcript.push({ slotId, question: result.nextQuestion!, answer: "" });
     session.updated_at = new Date().toISOString();
     await db.updateMiningSession(session);
     res.status(200).json({
@@ -125,8 +159,10 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
+  const nextQuestion = openingFor(nextSlotId);
   session.slot_index = nextIndex;
   session.slot_state = newSlotState();
+  session.transcript.push({ slotId: nextSlotId, question: nextQuestion, answer: "" });
   session.updated_at = new Date().toISOString();
   await db.updateMiningSession(session);
 
@@ -140,7 +176,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     sessionId: session.id,
     slotIndex: nextIndex,
     slotName: nameFor(nextSlotId),
-    question: openingFor(nextSlotId),
+    question: nextQuestion,
     checkpointNote,
     lastCard: card,
     done: false

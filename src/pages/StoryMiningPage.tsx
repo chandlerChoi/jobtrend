@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ChatBubble from "../components/feature/ChatBubble";
-import { startStoryMining, continueStoryMining } from "../api/endpoints";
+import { startStoryMining, continueStoryMining, getActiveStoryMiningSession } from "../api/endpoints";
 import type { StoryCardRow } from "../../shared/types";
 
 interface Turn {
@@ -23,14 +23,40 @@ export default function StoryMiningPage() {
   const [done, setDone] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  async function startFresh() {
+    setLoading(true);
+    const res = await startStoryMining();
+    setSessionId(res.sessionId);
+    setSlotName(res.slotName ?? null);
+    setSlotIndex(res.slotIndex ?? 0);
+    setTurns([{ question: res.question ?? "" }]);
+    setDone(false);
+    setCheckpointNote(null);
+    setLoading(false);
+  }
+
   useEffect(() => {
-    startStoryMining().then((res) => {
-      setSessionId(res.sessionId);
-      setSlotName(res.slotName ?? null);
-      setSlotIndex(res.slotIndex ?? 0);
-      setTurns([{ question: res.question ?? "" }]);
-      setLoading(false);
-    });
+    // Resume the in-progress session if one exists; every turn is saved
+    // server-side, so leaving mid-interview loses nothing.
+    getActiveStoryMiningSession()
+      .then((res) => {
+        if (res.session && res.session.transcript.length > 0) {
+          setSessionId(res.session.sessionId);
+          setSlotName(res.session.slotName);
+          setSlotIndex(res.session.slotIndex);
+          setTurns(
+            res.session.transcript.map((t) => ({
+              question: t.question,
+              answer: t.answer || undefined
+            }))
+          );
+          setLoading(false);
+        } else {
+          return startFresh();
+        }
+      })
+      .catch(() => startFresh());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -77,9 +103,22 @@ export default function StoryMiningPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 animate-fadeUp">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">스토리뱅크 채굴</h1>
-        <p className="mt-1 text-sm text-gray-500">{OPENING}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">스토리뱅크 채굴</h1>
+          <p className="mt-1 text-sm text-gray-500">{OPENING}</p>
+          <p className="mt-1 text-xs text-gray-400">대화는 자동 저장돼요. 언제든 나갔다가 이어서 진행할 수 있어요.</p>
+        </div>
+        {!done && turns.some((t) => t.answer) && (
+          <button
+            onClick={() => {
+              if (window.confirm("진행 중인 인터뷰를 버리고 처음부터 다시 시작할까요?")) startFresh();
+            }}
+            className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+          >
+            새로 시작하기
+          </button>
+        )}
       </div>
 
       {!done && (

@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { to: "/news", label: "트렌드" },
   { to: "/job-fairs", label: "채용행사" },
   { to: "/interview", label: "AI 면접" },
+  { to: "/story-bank", label: "스토리뱅크" },
 ];
 
 function avatarInitials(email: string | undefined | null): string {

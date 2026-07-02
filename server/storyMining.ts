@@ -135,12 +135,22 @@ export function detectAbstraction(text: string): { isAbstract: boolean; reason: 
 
 export function inferFilledModules(text: string): Record<StoryModule, boolean> {
   const filled = Object.fromEntries(STORY_MODULES.map((m) => [m, false])) as Record<StoryModule, boolean>;
-  if (/(때|당시|처음에|먼저)/.test(text)) filled.situation = true;
-  if (/(어려웠|힘들었|문제는|막혔|틀렸|아니었|다른.*하고 있었)/.test(text)) filled.friction = true;
-  if (/(그래서|해서|하기 위해|실제로|시도)/.test(text)) filled.action = true;
-  if (/\d+(%|건|개|원|시간|일|주|개월|년)/.test(text)) filled.result_quant = true;
-  if (/(관계|신뢰|배웠|느꼈)/.test(text)) filled.result_qual = true;
-  if (/(원칙|그 이후로|지금도|지금까지)/.test(text)) filled.reflection = true;
+  // situation: explicit time markers, job/team context, or an
+  // episode-opener ("~한 경우가 있었는데", "~하면서") — real answers
+  // rarely contain the literal words 때/당시, so match how people
+  // actually set a scene.
+  if (
+    /(때|당시|처음에|먼저|학년|년도|년 전|무렵|시절)/.test(text) ||
+    /(근무|재직|입사|담당|영업|팀|부서|프로젝트|회사|직장|업무)[^.]{0,10}(하면서|중에|하다가|할 때|에서)/.test(text) ||
+    /(경우가 있었|일이 있었|적이 있었|상황이었|했었는데|였는데)/.test(text)
+  ) {
+    filled.situation = true;
+  }
+  if (/(어려웠|힘들었|문제는|문제가|막혔|틀렸|아니었|실수|지연|늦어|부족|갈등|이견|난감|위기|피해|다른.*하고 있었)/.test(text)) filled.friction = true;
+  if (/(그래서|해서|하기 위해|실제로|시도|보내서|보냈|연락|공유|설득|요청|제안|만들|바꿨|결정했|진행했)/.test(text)) filled.action = true;
+  if (/\d+\s*(%|퍼센트|배|건|개|명|원|시간|일|주|개월|년)/.test(text)) filled.result_quant = true;
+  if (/(관계|신뢰|배웠|느꼈|이해를|이해해|만족|평가|인정받|고마워|덕분에)/.test(text)) filled.result_qual = true;
+  if (/(원칙|교훈|기준이|그 이후로|지금도|지금까지|하게 됐|하려고 한다|중요하다고|배움)/.test(text)) filled.reflection = true;
   return filled;
 }
 
@@ -148,7 +158,8 @@ export function newSlotState(): SlotProgressState {
   return {
     modules_filled: Object.fromEntries(STORY_MODULES.map((m) => [m, false])) as Record<StoryModule, boolean>,
     raw_answers: [],
-    followup_count: 0
+    followup_count: 0,
+    modules_asked_count: {}
   };
 }
 
@@ -166,13 +177,23 @@ export function stepSlot(slotId: SlotId, state: SlotProgressState, answer: strin
   const next: SlotProgressState = {
     modules_filled: { ...state.modules_filled },
     raw_answers: [...state.raw_answers, answer],
-    followup_count: state.followup_count
+    followup_count: state.followup_count,
+    modules_asked_count: { ...(state.modules_asked_count ?? {}) }
   };
 
   const detection = detectAbstraction(answer);
   const filled = inferFilledModules(answer);
   for (const m of STORY_MODULES) {
     next.modules_filled[m] = next.modules_filled[m] || filled[m];
+  }
+
+  // A module already probed once is accepted best-effort — the user
+  // answered it as well as they're going to; re-asking the identical
+  // question is what caused the original repeat-loop bug.
+  for (const m of STORY_MODULES) {
+    if (!next.modules_filled[m] && (next.modules_asked_count![m] ?? 0) >= 1) {
+      next.modules_filled[m] = true;
+    }
   }
 
   const missing = STORY_MODULES.filter((m) => !next.modules_filled[m]);
@@ -191,6 +212,7 @@ export function stepSlot(slotId: SlotId, state: SlotProgressState, answer: strin
   } else {
     const target = missing[0];
     nextQuestion = template.followups[target] ?? GENERIC_FOLLOWUPS[target];
+    next.modules_asked_count![target] = (next.modules_asked_count![target] ?? 0) + 1;
   }
 
   next.followup_count += 1;
@@ -210,3 +232,52 @@ export function nameFor(slotId: SlotId): string {
 }
 
 export const TOTAL_SLOTS = SLOT_IDS.length;
+
+// F4 연동 — pick the story card most relevant to an interview question
+// by plain token overlap (Phase 1; pgvector embedding search is the
+// planned Phase 2 upgrade). Korean has no cheap stemmer here, so we
+// compare 2+ char tokens and also give slot-name matches extra weight.
+export interface StoryHintSource {
+  slot_name: string;
+  raw_answers: string[];
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .split(/[^가-힣a-zA-Z0-9]+/)
+      .filter((t) => t.length >= 2)
+  );
+}
+
+export function findStoryHint(
+  questionText: string,
+  cards: StoryHintSource[]
+): { slotName: string; snippet: string } | null {
+  if (cards.length === 0) return null;
+  const qTokens = tokenize(questionText);
+  if (qTokens.size === 0) return null;
+
+  let best: { card: StoryHintSource; score: number } | null = null;
+  for (const card of cards) {
+    const cardText = card.raw_answers.join(" ");
+    const cTokens = tokenize(cardText + " " + card.slot_name);
+    let score = 0;
+    for (const t of qTokens) {
+      if (cTokens.has(t)) score += 1;
+      // partial containment catches particles glued onto nouns
+      // (e.g. question "갈등을" vs answer "갈등"), which exact token
+      // matching would miss.
+      else if (t.length >= 2 && [...cTokens].some((c) => c.includes(t) || t.includes(c))) score += 0.5;
+    }
+    if (!best || score > best.score) best = { card, score };
+  }
+
+  if (!best || best.score < 2) return null;
+
+  // The last answer of a slot usually carries the reflection/principle,
+  // which is the most reusable line in an interview.
+  const lastAnswer = best.card.raw_answers[best.card.raw_answers.length - 1] ?? "";
+  const snippet = lastAnswer.length > 120 ? lastAnswer.slice(0, 120) + "…" : lastAnswer;
+  return { slotName: best.card.slot_name, snippet };
+}

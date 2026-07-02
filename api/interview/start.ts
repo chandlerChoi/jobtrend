@@ -4,6 +4,7 @@ import { withErrorHandling } from "../../server/respond.js";
 import { requireUser } from "../../server/auth.js";
 import { db } from "../../server/db.js";
 import { generateInterviewQuestions } from "../../server/claude.js";
+import { findStoryHint } from "../../server/storyMining.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   if (req.method !== "POST") {
@@ -25,6 +26,21 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   }
 
   const questions = await generateInterviewQuestions(jdText, resumeText ?? null, 5, persona ?? "startup");
+
+  // F5 연동 — attach the most relevant story-bank card to each question
+  // so the answer box can show a "참고할 스토리" hint. No-op for users
+  // with an empty story bank.
+  try {
+    const cards = await db.listStoryCards(user.id);
+    if (cards.length > 0) {
+      for (const q of questions) {
+        const hint = findStoryHint(q.text, cards);
+        if (hint) q.storyHint = hint;
+      }
+    }
+  } catch {
+    // hints are best-effort; never block the interview on them
+  }
 
   const remaining = await db.decrementCredit(user.id);
   if (remaining < 0) {

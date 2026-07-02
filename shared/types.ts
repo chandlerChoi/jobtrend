@@ -86,6 +86,10 @@ export interface InterviewQuestion {
   id: number;
   text: string;
   order: number;
+  // F5 연동 — the user's most relevant story-bank card for this
+  // question, keyword-matched at generation time. Absent when the
+  // story bank is empty or nothing matches.
+  storyHint?: { slotName: string; snippet: string };
 }
 
 export interface InterviewAnswer {
@@ -143,6 +147,16 @@ export interface SlotProgressState {
   modules_filled: Record<StoryModule, boolean>;
   raw_answers: string[];
   followup_count: number;
+  // Per-module ask counter — after 2 targeted re-asks a module is
+  // force-accepted (best-effort) so detection gaps can't loop forever.
+  // Optional for rows created before v7.0.
+  modules_asked_count?: Partial<Record<StoryModule, number>>;
+}
+
+export interface TranscriptEntry {
+  slotId: SlotId;
+  question: string;
+  answer: string;
 }
 
 export interface StoryMiningSessionRow {
@@ -150,9 +164,17 @@ export interface StoryMiningSessionRow {
   user_id: string;
   slot_index: number; // 0..9, index into SLOT_IDS
   slot_state: SlotProgressState;
+  transcript: TranscriptEntry[];
   status: "in_progress" | "completed";
   created_at: string;
   updated_at: string;
+}
+
+export interface BookmarkRow {
+  id: string;
+  user_id: string;
+  news_id: string;
+  created_at: string;
 }
 
 export interface StoryCardRow {

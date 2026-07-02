@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getTrends, getNewsSummary } from "../api/endpoints";
+import { getTrends, getNewsSummary, listBookmarks, addBookmark, removeBookmark } from "../api/endpoints";
 import type { TrendResponse } from "../api/endpoints";
 import TrendLine from "../components/feature/TrendLine";
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -10,7 +10,15 @@ const INDUSTRIES = ["전체", "IT·SW", "제조", "금융", "공공기관", "유
 const SIZES = ["전체", "대기업", "중견", "중소", "공공"];
 const EMP_TYPES = ["전체", "정규직", "기간제", "계약직", "인턴"];
 
-function NewsCard({ news }: { news: RecruitmentNewsRow }) {
+function NewsCard({
+  news,
+  bookmarked,
+  onToggleBookmark
+}: {
+  news: RecruitmentNewsRow;
+  bookmarked: boolean;
+  onToggleBookmark: (news: RecruitmentNewsRow) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [summary, setSummary] = useState<{ requirements: string[]; preferred: string[]; interviewType: string[] } | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -39,11 +47,22 @@ function NewsCard({ news }: { news: RecruitmentNewsRow }) {
           </Link>
           <h3 className="mt-1 font-semibold text-gray-900 leading-snug">{news.title}</h3>
         </div>
-        {news.company_type && (
-          <span className="shrink-0 rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-600">
-            {news.company_type}
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {news.company_type && (
+            <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-600">
+              {news.company_type}
+            </span>
+          )}
+          <button
+            onClick={() => onToggleBookmark(news)}
+            title={bookmarked ? "저장 해제" : "공고 저장"}
+            className={`text-lg leading-none transition-colors ${
+              bookmarked ? "text-amber-400 hover:text-amber-500" : "text-gray-300 hover:text-amber-400"
+            }`}
+          >
+            {bookmarked ? "★" : "☆"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
@@ -119,6 +138,43 @@ export default function TrendDashboardPage() {
   const [appliedKeyword, setAppliedKeyword] = useState("");
   const [data, setData] = useState<TrendResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [savedNews, setSavedNews] = useState<RecruitmentNewsRow[]>([]);
+  const [showSaved, setShowSaved] = useState(false);
+
+  useEffect(() => {
+    listBookmarks()
+      .then((res) => {
+        setBookmarkedIds(new Set(res.ids));
+        setSavedNews(res.news);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function toggleBookmark(news: RecruitmentNewsRow) {
+    const isBookmarked = bookmarkedIds.has(news.id);
+    // optimistic update
+    setBookmarkedIds((prev) => {
+      const next = new Set(prev);
+      if (isBookmarked) next.delete(news.id);
+      else next.add(news.id);
+      return next;
+    });
+    setSavedNews((prev) => (isBookmarked ? prev.filter((n) => n.id !== news.id) : [news, ...prev]));
+    try {
+      if (isBookmarked) await removeBookmark(news.id);
+      else await addBookmark(news.id);
+    } catch {
+      // revert on failure
+      setBookmarkedIds((prev) => {
+        const next = new Set(prev);
+        if (isBookmarked) next.add(news.id);
+        else next.delete(news.id);
+        return next;
+      });
+      setSavedNews((prev) => (isBookmarked ? [news, ...prev] : prev.filter((n) => n.id !== news.id)));
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,11 +213,45 @@ export default function TrendDashboardPage() {
 
   return (
     <div className="space-y-5 animate-fadeUp">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">채용 트렌드</h1>
-        <p className="mt-1 text-sm text-gray-500">고용24 공채속보를 AI가 실시간으로 분석해드려요.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">채용 트렌드</h1>
+          <p className="mt-1 text-sm text-gray-500">고용24 공채속보를 AI가 실시간으로 분석해드려요.</p>
+        </div>
+        <button
+          onClick={() => setShowSaved((v) => !v)}
+          className={`shrink-0 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            showSaved
+              ? "bg-amber-400 text-white"
+              : "border border-gray-200 bg-white text-gray-600 hover:border-amber-400 hover:text-amber-500"
+          }`}
+        >
+          ★ 저장한 공고
+          {bookmarkedIds.size > 0 && (
+            <span className={`rounded-full px-1.5 py-0.5 text-xs leading-none ${showSaved ? "bg-white/25" : "bg-amber-100 text-amber-600"}`}>
+              {bookmarkedIds.size}
+            </span>
+          )}
+        </button>
       </div>
 
+      {/* 저장한 공고 보기 */}
+      {showSaved && (
+        savedNews.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+            <p className="text-gray-400">저장한 공고가 없어요. 카드의 ☆ 버튼으로 공고를 저장해보세요.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {savedNews.map((n) => (
+              <NewsCard key={n.id} news={n} bookmarked={bookmarkedIds.has(n.id)} onToggleBookmark={toggleBookmark} />
+            ))}
+          </div>
+        )
+      )}
+
+      {!showSaved && (
+      <>
       {/* 검색바 */}
       <div className="flex gap-2">
         <input
@@ -284,11 +374,13 @@ export default function TrendDashboardPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {data.news.map((n) => (
-                <NewsCard key={n.id} news={n} />
+                <NewsCard key={n.id} news={n} bookmarked={bookmarkedIds.has(n.id)} onToggleBookmark={toggleBookmark} />
               ))}
             </div>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   );
