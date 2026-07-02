@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import NavBar from "./components/common/NavBar";
+import PrivateRoute from "./components/common/PrivateRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { CreditProvider } from "./context/CreditContext";
 import TrendDashboardPage from "./pages/TrendDashboardPage";
@@ -8,6 +9,8 @@ import JobFairCalendarPage from "./pages/JobFairCalendarPage";
 import InterviewPage from "./pages/InterviewPage";
 import InterviewSessionPage from "./pages/InterviewSessionPage";
 import MyPage from "./pages/MyPage";
+import LoginPage from "./pages/LoginPage";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 
 export default function App() {
   return (
@@ -21,9 +24,11 @@ export default function App() {
               <Route path="/news" element={<TrendDashboardPage />} />
               <Route path="/companies/:name" element={<CompanyPage />} />
               <Route path="/job-fairs" element={<JobFairCalendarPage />} />
-              <Route path="/interview" element={<InterviewPage />} />
-              <Route path="/interview/:sessionId" element={<InterviewSessionPage />} />
-              <Route path="/mypage" element={<MyPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="/interview" element={<PrivateRoute><InterviewPage /></PrivateRoute>} />
+              <Route path="/interview/:sessionId" element={<PrivateRoute><InterviewSessionPage /></PrivateRoute>} />
+              <Route path="/mypage" element={<PrivateRoute><MyPage /></PrivateRoute>} />
             </Routes>
           </main>
         </div>
