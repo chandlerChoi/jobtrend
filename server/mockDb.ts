@@ -13,7 +13,9 @@ import type {
   CompanyAlertRow,
   DailyDigestRow,
   InterviewSessionRow,
-  CreditTransactionRow
+  CreditTransactionRow,
+  StoryMiningSessionRow,
+  StoryCardRow
 } from "../shared/types.js";
 
 interface Store {
@@ -25,6 +27,8 @@ interface Store {
   dailyDigests: DailyDigestRow[];
   interviewSessions: InterviewSessionRow[];
   creditTransactions: CreditTransactionRow[];
+  storyMiningSessions: StoryMiningSessionRow[];
+  storyCards: StoryCardRow[];
   seeded: boolean;
 }
 
@@ -41,6 +45,8 @@ function emptyStore(): Store {
     dailyDigests: [],
     interviewSessions: [],
     creditTransactions: [],
+    storyMiningSessions: [],
+    storyCards: [],
     seeded: false
   };
 }
@@ -184,6 +190,12 @@ export const db = {
   },
   get creditTransactions() {
     return getStore().creditTransactions;
+  },
+  get storyMiningSessions() {
+    return getStore().storyMiningSessions;
+  },
+  get storyCards() {
+    return getStore().storyCards;
   }
 };
 

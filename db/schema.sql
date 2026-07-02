@@ -108,3 +108,32 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   balance_after INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- F5 — Story Bank mining interview (server/storyMining.ts). One session
+-- walks the user through 10 slots (S01-S10); slot_state tracks the current
+-- slot's module-detection progress and resets each time a slot completes.
+CREATE TABLE IF NOT EXISTS story_mining_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slot_index INT NOT NULL DEFAULT 0,
+  slot_state JSONB NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_story_mining_user ON story_mining_sessions(user_id);
+
+-- One row per completed (or abandoned) slot. modules_filled + raw_answers
+-- are the MVP shape; splitting raw_answers into the 6 discrete module
+-- fields from STAGE 2 of the design doc is a follow-up LLM extraction pass.
+CREATE TABLE IF NOT EXISTS story_cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slot_id VARCHAR(10) NOT NULL,
+  slot_name VARCHAR(50) NOT NULL,
+  raw_answers JSONB NOT NULL,
+  modules_filled JSONB NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'slot_complete',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_story_cards_user ON story_cards(user_id);

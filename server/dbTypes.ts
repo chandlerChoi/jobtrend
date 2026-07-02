@@ -10,7 +10,9 @@ import type {
   CompanyAlertRow,
   DailyDigestContent,
   InterviewSessionRow,
-  CreditTransactionRow
+  CreditTransactionRow,
+  StoryMiningSessionRow,
+  StoryCardRow
 } from "../shared/types.js";
 
 export type NewNews = Omit<RecruitmentNewsRow, "id" | "collected_at">;
@@ -57,4 +59,10 @@ export interface Db {
   createInterviewSession(row: InterviewSessionRow): Promise<void>;
   getInterviewSession(id: string, userId: string): Promise<InterviewSessionRow | null>;
   updateInterviewSession(session: InterviewSessionRow): Promise<void>;
+
+  createMiningSession(row: StoryMiningSessionRow): Promise<void>;
+  getMiningSession(id: string, userId: string): Promise<StoryMiningSessionRow | null>;
+  updateMiningSession(session: StoryMiningSessionRow): Promise<void>;
+  createStoryCard(row: Omit<StoryCardRow, "id" | "created_at">): Promise<StoryCardRow>;
+  listStoryCards(userId: string): Promise<StoryCardRow[]>;
 }

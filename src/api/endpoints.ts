@@ -4,7 +4,8 @@ import type {
   InterviewSummary,
   RecruitmentNewsRow,
   CompanyInfoRow,
-  JobFairRow
+  JobFairRow,
+  StoryCardRow
 } from "../../shared/types";
 
 export interface TrendResponse {
@@ -93,4 +94,30 @@ export function chargeCredits(credits: number) {
     method: "POST",
     body: JSON.stringify({ credits })
   });
+}
+
+export interface StoryBankTurnResponse {
+  sessionId: string;
+  slotIndex?: number;
+  slotName?: string;
+  question?: string | null;
+  checkpointNote?: string | null;
+  lastCard?: StoryCardRow;
+  totalSlots?: number;
+  done: boolean;
+}
+
+export function startStoryMining() {
+  return apiFetch<StoryBankTurnResponse>("/story-bank", { method: "POST", body: JSON.stringify({}) });
+}
+
+export function continueStoryMining(sessionId: string, answer: string) {
+  return apiFetch<StoryBankTurnResponse>("/story-bank", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, answer })
+  });
+}
+
+export function listStoryCards() {
+  return apiFetch<{ cards: StoryCardRow[] }>("/story-bank");
 }

@@ -121,3 +121,47 @@ export interface CreditTransactionRow {
   balance_after: number;
   created_at: string;
 }
+
+// F5 — Story Bank mining interview. Ports the 10-slot STAR mining design:
+// each slot asks an opening question, then detects which of 6 answer
+// modules (situation/friction/action/result_quant/result_qual/reflection)
+// are still missing and asks a targeted follow-up (max 3) before moving on.
+export const STORY_MODULES = [
+  "situation",
+  "friction",
+  "action",
+  "result_quant",
+  "result_qual",
+  "reflection"
+] as const;
+export type StoryModule = typeof STORY_MODULES[number];
+
+export const SLOT_IDS = ["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10"] as const;
+export type SlotId = typeof SLOT_IDS[number];
+
+export interface SlotProgressState {
+  modules_filled: Record<StoryModule, boolean>;
+  raw_answers: string[];
+  followup_count: number;
+}
+
+export interface StoryMiningSessionRow {
+  id: string;
+  user_id: string;
+  slot_index: number; // 0..9, index into SLOT_IDS
+  slot_state: SlotProgressState;
+  status: "in_progress" | "completed";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoryCardRow {
+  id: string;
+  user_id: string;
+  slot_id: SlotId;
+  slot_name: string;
+  raw_answers: string[];
+  modules_filled: Record<StoryModule, boolean>;
+  status: "slot_complete" | "slot_incomplete";
+  created_at: string;
+}

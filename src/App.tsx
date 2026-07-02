@@ -11,6 +11,7 @@ import InterviewSessionPage from "./pages/InterviewSessionPage";
 import MyPage from "./pages/MyPage";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
+import StoryMiningPage from "./pages/StoryMiningPage";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
               <Route path="/interview" element={<PrivateRoute><InterviewPage /></PrivateRoute>} />
               <Route path="/interview/:sessionId" element={<PrivateRoute><InterviewSessionPage /></PrivateRoute>} />
               <Route path="/mypage" element={<PrivateRoute><MyPage /></PrivateRoute>} />
+              <Route path="/story-bank" element={<PrivateRoute><StoryMiningPage /></PrivateRoute>} />
             </Routes>
           </main>
         </div>

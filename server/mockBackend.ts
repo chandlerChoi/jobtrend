@@ -163,6 +163,29 @@ export const mockBackend: Db = {
   async updateInterviewSession(session) {
     const idx = store.interviewSessions.findIndex((s) => s.id === session.id);
     if (idx >= 0) store.interviewSessions[idx] = session;
+  },
+
+  async createMiningSession(row) {
+    store.storyMiningSessions.push(row);
+  },
+
+  async getMiningSession(id, userId) {
+    return store.storyMiningSessions.find((s) => s.id === id && s.user_id === userId) ?? null;
+  },
+
+  async updateMiningSession(session) {
+    const idx = store.storyMiningSessions.findIndex((s) => s.id === session.id);
+    if (idx >= 0) store.storyMiningSessions[idx] = session;
+  },
+
+  async createStoryCard(row) {
+    const card = { id: randomUUID(), created_at: new Date().toISOString(), ...row };
+    store.storyCards.push(card);
+    return card;
+  },
+
+  async listStoryCards(userId) {
+    return store.storyCards.filter((c) => c.user_id === userId);
   }
 };
 

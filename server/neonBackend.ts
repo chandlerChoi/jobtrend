@@ -259,5 +259,54 @@ export const neonBackend: Db = {
         status = ${session.status}
       WHERE id = ${session.id}
     `;
+  },
+
+  async createMiningSession(row) {
+    const sql = client();
+    await sql`
+      INSERT INTO story_mining_sessions (id, user_id, slot_index, slot_state, status)
+      VALUES (${row.id}, ${row.user_id}, ${row.slot_index}, ${JSON.stringify(row.slot_state)}, ${row.status})
+    `;
+  },
+
+  async getMiningSession(id, userId) {
+    const sql = client();
+    const rows = await sql`
+      SELECT * FROM story_mining_sessions WHERE id = ${id} AND user_id = ${userId}
+    `;
+    return (rows[0] as any) ?? null;
+  },
+
+  async updateMiningSession(session) {
+    const sql = client();
+    await sql`
+      UPDATE story_mining_sessions SET
+        slot_index = ${session.slot_index},
+        slot_state = ${JSON.stringify(session.slot_state)},
+        status = ${session.status},
+        updated_at = now()
+      WHERE id = ${session.id}
+    `;
+  },
+
+  async createStoryCard(row) {
+    const sql = client();
+    const rows = await sql`
+      INSERT INTO story_cards (user_id, slot_id, slot_name, raw_answers, modules_filled, status)
+      VALUES (
+        ${row.user_id}, ${row.slot_id}, ${row.slot_name},
+        ${JSON.stringify(row.raw_answers)}, ${JSON.stringify(row.modules_filled)}, ${row.status}
+      )
+      RETURNING *
+    `;
+    return rows[0] as any;
+  },
+
+  async listStoryCards(userId) {
+    const sql = client();
+    const rows = await sql`
+      SELECT * FROM story_cards WHERE user_id = ${userId} ORDER BY created_at ASC
+    `;
+    return rows as any;
   }
 };
