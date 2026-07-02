@@ -32,7 +32,13 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  const { jdText, resumeText, persona } = req.body ?? {};
+  const { jdText, resumeText, persona, industryPersona, stylePersona } = req.body ?? {};
+  // Support combined persona: if both industry+style sent, join them; else fall back to legacy single persona field
+  const resolvedPersona: string = (() => {
+    const parts = [industryPersona, stylePersona].filter(Boolean);
+    if (parts.length > 0) return parts.join("|");
+    return persona ?? "startup";
+  })();
 
   if (!jdText) {
     res.status(400).json({ error: "jdText required" });
@@ -47,7 +53,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  const questions = await generateInterviewQuestions(jdText, resumeText ?? null, 5, persona ?? "startup");
+  const questions = await generateInterviewQuestions(jdText, resumeText ?? null, 5, resolvedPersona);
 
   // 스토리뱅크 힌트 첨부
   try {
@@ -72,7 +78,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   const session = {
     id: randomUUID(),
     user_id: user.id,
-    persona_type: persona ?? "startup",
+    persona_type: resolvedPersona,
     jd_text: jdText,
     resume_text: resumeText ?? null,
     questions_json: questions,

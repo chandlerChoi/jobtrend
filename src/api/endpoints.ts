@@ -61,8 +61,9 @@ export const deleteAlert = (id: string) => apiFetch<void>(`/alerts?id=${id}`, { 
 export const getDailyDigest = (_date?: string) => Promise.resolve(null);
 
 // chargeCredits is a UI stub — no server endpoint (removed to stay within 12-fn limit)
-export function chargeCredits(_credits: number) {
-  return Promise.resolve({ creditsRemaining: 0, charged: _credits });
+// Returns a sentinel so CreditContext can add the delta rather than set absolute
+export function chargeCredits(credits: number) {
+  return Promise.resolve({ creditsRemaining: credits, charged: credits, isDelta: true });
 }
 
 export function listJobFairs() {
@@ -75,7 +76,13 @@ export interface StartInterviewResponse {
   creditsRemaining: number;
 }
 
-export function startInterview(payload: { jdText: string; resumeText?: string; persona?: string }) {
+export function startInterview(payload: {
+  jdText: string;
+  resumeText?: string;
+  persona?: string;
+  industryPersona?: string;
+  stylePersona?: string;
+}) {
   return apiFetch<StartInterviewResponse>("/interview/start", { method: "POST", body: JSON.stringify(payload) });
 }
 

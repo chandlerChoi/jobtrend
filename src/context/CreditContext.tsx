@@ -29,7 +29,12 @@ export function CreditProvider({ children }: { children: React.ReactNode }) {
   const charge = useCallback(
     async (amount: number) => {
       const result = await chargeCredits(amount);
-      setCredits(result.creditsRemaining);
+      // isDelta=true means add delta, not set absolute
+      if ((result as { isDelta?: boolean }).isDelta) {
+        setCredits((prev) => prev + result.charged);
+      } else {
+        setCredits(result.creditsRemaining);
+      }
     },
     []
   );

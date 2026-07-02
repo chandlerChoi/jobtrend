@@ -84,6 +84,15 @@ function mockQuestions(jobDescription: string, count: number): InterviewQuestion
   return ordered.slice(0, count).map((q, i) => ({ id: i + 1, text: q, order: i + 1 }));
 }
 
+function buildPersonaSystem(persona: string): string {
+  // Support combined personas like "startup|stress" or "startup" or "stress"
+  const parts = persona.split("|").map((p) => p.trim()).filter(Boolean);
+  const prompts = parts.map((p) => PERSONA_SYSTEM[p]).filter(Boolean);
+  if (prompts.length === 0) return PERSONA_SYSTEM.startup;
+  if (prompts.length === 1) return prompts[0];
+  return `[복합 면접관 페르소나]\n${prompts.join("\n\n또한, ")}`;
+}
+
 export async function generateInterviewQuestions(
   jobDescription: string,
   resumeText: string | null,
@@ -92,7 +101,8 @@ export async function generateInterviewQuestions(
 ): Promise<InterviewQuestion[]> {
   if (!process.env.OPENAI_API_KEY) return mockQuestions(jobDescription, count);
   try {
-    const system = `${PERSONA_SYSTEM[persona] ?? PERSONA_SYSTEM.startup} 주어진 JD와 이력서를 바탕으로 실제 면접에서 나올 가능성이 높은 질문 ${count}개를 생성하세요. 문자열 배열 JSON으로만 응답하세요. 예: ["질문1","질문2"]`;
+    const personaSystem = buildPersonaSystem(persona);
+    const system = `${personaSystem} 주어진 JD와 이력서를 바탕으로 실제 면접에서 나올 가능성이 높은 질문 ${count}개를 생성하세요. 문자열 배열 JSON으로만 응답하세요. 예: ["질문1","질문2"]`;
     const raw = await callOpenAI(system, `JD: ${jobDescription}\n이력서: ${resumeText ?? "미제공"}`);
     const match = raw.match(/\[[\s\S]*\]/);
     const parsed = JSON.parse(match ? match[0] : raw) as string[];
