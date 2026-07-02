@@ -56,9 +56,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function kakaoLogin() {
+    // account_email scope requires Kakao business verification — request
+    // only profile_nickname so login works on unverified apps.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: "profile_nickname"
+      }
     });
     return { error: error?.message ?? null };
   }
