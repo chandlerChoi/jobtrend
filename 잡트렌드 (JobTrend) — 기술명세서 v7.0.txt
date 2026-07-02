@@ -1,0 +1,157 @@
+잡트렌드 (JobTrend) — 기술명세서 v7.0
+==========================================
+(v6.0 대비 변경분만 기록. F5 스토리뱅크 버그 수정 + 4가지 신규 요구사항)
+
+0. 이번 버전에서 해결할 것
+---------------------------
+1) [버그] 같은 후속질문이 무한 반복되는 문제
+2) [UX] 네비게이션에 "스토리뱅크" 노출 (AI 면접 옆)
+3) [저장] 로그인 유저의 채굴 대화를 Neon DB에 자동 저장 (이미 저장은
+   되고 있었으나, 새로고침/재방문 시 이어보기가 안 됐던 부분 보강)
+4) [이어하기] 채팅이 길어질 때 중간 저장 후 다음에 이어서 진행
+5) [F4 연동] AI 모의면접 답변 입력창 아래에 스토리뱅크 기반 힌트
+   (RAG 추출) 노출
+
+1. 버그 수정 — 후속질문 무한반복
+----------------------------------
+증상: "그게 언제, 어떤 상황에서였는지..." 질문이 답변을 아무리 구체적
+으로 해도 계속 반복됨.
+
+원인 (server/storyMining.ts):
+  - inferFilledModules()의 situation 판정 정규식이
+    /(때|당시|처음에|먼저)/ 4개 키워드에만 의존
+  - "제조업 해외영업에 근무하면서 ~한 경우가 있었는데" 같은 실제
+    상황 서술에는 저 키워드가 없어 situation이 영원히 false로 남음
+  - stepSlot()은 STORY_MODULES 배열 순서상 가장 먼저 비어있는 모듈
+    (situation)을 계속 타겟팅 → 같은 질문 무한 반복
+
+해결 방안 (2단 방어):
+  (a) 감지 규칙 대폭 확장
+      situation 신호 추가: 직무/부서/기간 명사 패턴
+      ("근무|재직|담당|영업|팀|부서|프로젝트.*(하면서|중|당시)"),
+      "~한 경우가 있었는데", "~했었는데" 같은 사건 도입부 어미 패턴
+      friction/action/result 계열도 동일하게 동의어·어미 패턴 확장
+  (b) 모듈별 시도 횟수 캡 (근본 방지책, 정규식 정확도에 의존하지 않음)
+      slot_state에 per-module follow-up 카운터 추가
+      (예: modules_asked_count: {situation: 2, ...})
+      같은 모듈을 2회 재질문했는데도 못 채우면, 그 모듈은
+      "best-effort 충족"으로 강제 처리(raw 답변 텍스트를 해당 모듈의
+      근사치로 채택)하고 다음 미완성 모듈로 스킵
+      → 이러면 정규식이 못 잡아도 최대 2번 재질문 후 반드시 진행되어
+        무한반복 자체가 구조적으로 불가능해짐
+  전체 슬롯 최대 재질문 수(MAX_FOLLOWUP=3)는 유지 — (a)(b) 적용 후
+  실질적으로 3회 안에 못 채우는 경우는 거의 없어지지만, 안전장치로 유지
+
+2. 네비게이션 변경
+-------------------
+NavBar 링크: 트렌드 / 채용행사 / AI 면접 / 스토리뱅크 (4개로 확장)
+  - src/components/common/NavBar.tsx의 NAV_LINKS 배열에
+    { to: "/story-bank", label: "스토리뱅크" } 추가, "AI 면접" 바로 뒤
+  - v4.0에서 정한 "3개 링크" 원칙에서 4개로 늘어나는 것이나, 스토리뱅크가
+    F4/F6(자소서 도우미)의 데이터 허브 역할이라 주요 내비게이션 노출이
+    맞다고 판단
+
+3. 세션 저장 및 이어하기
+--------------------------
+현재 상태(v6.0): 매 턴마다 story_mining_sessions.slot_state가 Neon에
+저장되긴 하나, 프론트가 페이지 로드시 무조건 startStoryMining()으로
+새 세션을 생성해 진행 중이던 세션을 찾지 못함 — 실질적 "이어하기"가
+불가능했음.
+
+변경 사항:
+
+(1) DB — story_mining_sessions에 컬럼 추가
+    transcript JSONB NOT NULL DEFAULT '[]'
+      → [{ slotId, question, answer }, ...] 형태로 지금까지의 모든
+        질문/답변 쌍을 슬롯 경계 없이 순서대로 누적 저장
+        (새로고침 시 채팅 UI를 그대로 재구성하기 위함 — 기존
+        slot_state.raw_answers는 "현재 슬롯 안에서의 답변"만 담고
+        있어 전체 대화 복원에는 부족)
+
+(2) API — GET /api/story-bank 동작 확장
+    기존: 완료된 story_cards 목록만 반환
+    변경: 쿼리파라미터 ?active=1 전달 시, 해당 유저의
+    status='in_progress' 세션이 있으면 그 세션의 전체 상태
+    (sessionId, slotIndex, slotName, transcript, 마지막 질문)를 반환.
+    없으면 { session: null } 반환.
+    (Vercel 12-function 한도 유지를 위해 신규 엔드포인트 대신 기존
+    GET 핸들러에 분기 추가하는 방식 채택)
+
+(3) POST /api/story-bank 응답에도 transcript 누적 반영
+    매 턴마다 세션의 transcript 배열에 { slotId, question, answer }
+    push 후 저장
+
+(4) 프론트 — StoryMiningPage.tsx 로직 변경
+    마운트 시:
+      1. GET /api/story-bank?active=1 호출
+      2. 세션 있음 → transcript로 채팅 로그 복원, 마지막 질문부터 이어감
+      3. 세션 없음 → 기존처럼 POST {} 로 신규 시작
+    화면에 "새로 시작하기" 버튼 추가 (기존 in_progress 세션을 포기하고
+    처음부터 다시 시작하고 싶을 때 — 서버에는 별도 abandon 처리 없이,
+    새 세션을 만들면 이전 세션은 in_progress로 남아있되 UI에서만
+    최신 세션을 기준으로 동작. 완전 삭제는 범위 밖)
+
+4. AI 모의면접(F4) — 스토리뱅크 기반 힌트 (RAG)
+-------------------------------------------------
+목표: InterviewSessionPage의 답변 입력창(textarea) 아래에 "💡 참고할
+스토리" 형태로, 현재 질문과 관련성 높은 스토리카드 스니펫을 노출.
+
+Phase 1 (이번 빌드 범위 — 벡터DB 없이 즉시 구현 가능):
+  - 매칭 방식: 키워드/태그 기반 스코어링 (임베딩 없이)
+    1. 질문 텍스트에서 명사 키워드 추출 (간단한 한국어 명사 후보:
+       2음절 이상 어절 필터링 또는 OpenAI로 5개 키워드 추출 —
+       기존 callOpenAI 재사용, gpt-4.1-nano)
+    2. 유저의 story_cards.raw_answers 텍스트와 키워드 overlap 스코어링
+    3. 스코어 최상위 1개 카드의 raw_answers 중 reflection 성격 문장
+       (마지막 답변, 보통 원칙/교훈이 담김)을 힌트로 노출
+  - API: 기존 api/interview/start.ts 응답에 질문별 suggestion 필드를
+    추가 (questions: [{ id, text, order, storyHint? }])
+    → 질문 생성 시점에 한 번에 계산해 별도 엔드포인트 불필요
+      (12-function 한도 유지)
+  - 프론트: InterviewSessionPage에서 currentQuestion.storyHint가
+    있으면 textarea 위/아래에 회색 박스로 노출
+    ("💡 관련 스토리: {slot_name} — {snippet}")
+  - 스토리뱅크가 비어있는 유저는 storyHint 없이 기존과 동일하게 동작
+    (신규 유저 온보딩 유도 문구만 노출: "스토리뱅크를 채우면 맞춤
+    힌트를 받을 수 있어요")
+
+Phase 2 (범위 밖, 다음 버전):
+  - pgvector 확장 설치 + story_cards 임베딩 컬럼 추가
+  - OpenAI text-embedding-3-small로 각 카드 임베딩, 질문도 임베딩해
+    코사인 유사도 검색 (키워드 매칭보다 정밀)
+  - F6 자소서 도우미와 동일한 검색 인프라 재사용
+
+5. 변경 파일 요약 (구현 시 체크리스트)
+----------------------------------------
+- server/storyMining.ts
+    · 감지 정규식 확장, modules_asked_count 도입, best-effort 충족 로직
+- db/schema.sql
+    · story_mining_sessions.transcript JSONB 컬럼 추가
+- shared/types.ts
+    · SlotProgressState에 modules_asked_count 추가
+    · StoryMiningSessionRow에 transcript 추가
+- server/dbTypes.ts / mockBackend.ts / neonBackend.ts / mockDb.ts
+    · transcript 필드 반영, "활성 세션 조회" 메서드 추가
+      (getActiveMiningSession(userId))
+- api/story-bank/index.ts
+    · GET에 ?active=1 분기 추가
+    · POST 처리 시 transcript push 추가
+- api/interview/start.ts, server/claude.ts(generateInterviewQuestions)
+    · 질문 생성 후 story_cards 조회 + 키워드 매칭으로 storyHint 부여
+- src/pages/StoryMiningPage.tsx
+    · 마운트 시 활성 세션 복원 로직, "새로 시작하기" 버튼
+- src/pages/InterviewSessionPage.tsx
+    · storyHint 노출 UI
+- src/components/common/NavBar.tsx
+    · "스토리뱅크" 링크 추가
+- src/api/endpoints.ts
+    · getActiveStoryMiningSession(), InterviewQuestion에 storyHint 타입 추가
+
+6. 검증 계획
+-------------
+- 무한반복 재현 시나리오(situation 키워드 없는 장문 답변)로 회귀 테스트
+  → 2회 재질문 후 강제 진행되는지 확인
+- 새로고침 후 진행 중이던 세션이 transcript 그대로 복원되는지 확인
+- 스토리카드 0개 상태에서 AI 면접 진행 시 기존과 동일하게 동작하는지
+  확인 (회귀 방지)
+- 스토리카드 있는 상태에서 관련 질문에 storyHint가 붙는지 확인
