@@ -156,6 +156,20 @@ export function continueStoryMining(sessionId: string, answer: string) {
   });
 }
 
+export function skipStoryMining(sessionId: string) {
+  return apiFetch<StoryBankTurnResponse>("/story-bank", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, skip: true })
+  });
+}
+
+export function editStoryCard(cardId: string, rawAnswers: string[]) {
+  return apiFetch<{ ok: boolean }>("/story-bank?mode=edit", {
+    method: "POST",
+    body: JSON.stringify({ cardId, rawAnswers })
+  });
+}
+
 export function listStoryCards() {
   return apiFetch<{ cards: StoryCardRow[] }>("/story-bank");
 }

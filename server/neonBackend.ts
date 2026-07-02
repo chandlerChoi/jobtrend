@@ -333,6 +333,15 @@ export const neonBackend: Db = {
     return rows as any;
   },
 
+  async updateStoryCard(id, userId, rawAnswers) {
+    const sql = client();
+    await sql`
+      UPDATE story_cards
+      SET raw_answers = ${JSON.stringify(rawAnswers)}::jsonb
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+  },
+
   async addBookmark(userId, newsId) {
     const sql = client();
     const rows = await sql`

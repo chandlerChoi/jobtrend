@@ -60,6 +60,18 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
+  // ── POST ?mode=edit — 스토리 카드 raw_answers 수정 ───────────────────────
+  if (req.query.mode === "edit") {
+    const { cardId, rawAnswers } = (req.body ?? {}) as { cardId?: string; rawAnswers?: string[] };
+    if (!cardId || !Array.isArray(rawAnswers)) {
+      res.status(400).json({ error: "cardId and rawAnswers required" });
+      return;
+    }
+    await db.updateStoryCard(cardId, user.id, rawAnswers);
+    res.status(200).json({ ok: true });
+    return;
+  }
+
   // ── POST ?mode=version ────────────────────────────────────────────────────
   if (req.query.mode === "version") {
     const { action, versionId, versionName, jobPostingText, companyName, storyContent } =
@@ -109,7 +121,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   }
 
   // ── POST 채굴 세션 ────────────────────────────────────────────────────────
-  const { sessionId, answer } = (req.body ?? {}) as { sessionId?: string; answer?: string };
+  const { sessionId, answer, skip } = (req.body ?? {}) as { sessionId?: string; answer?: string; skip?: boolean };
 
   if (!sessionId) {
     const firstSlotId = slotIdAt(0)!;
@@ -151,7 +163,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  if (!answer) {
+  if (!answer && !skip) {
     const pending = (session.transcript ?? []).slice(-1)[0];
     res.status(200).json({
       sessionId: session.id,
@@ -163,15 +175,44 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
+  // ── 건너뛰기 ──────────────────────────────────────────────────────────────
+  if (skip) {
+    const nextIndex = session.slot_index + 1;
+    const nextSlotId = slotIdAt(nextIndex);
+    if (!nextSlotId) {
+      session.status = "completed";
+      session.updated_at = new Date().toISOString();
+      await db.updateMiningSession(session);
+      res.status(200).json({ sessionId: session.id, done: true, totalSlots: TOTAL_SLOTS });
+      return;
+    }
+    const nextQuestion = openingFor(nextSlotId);
+    session.slot_index = nextIndex;
+    session.slot_state = newSlotState();
+    session.transcript = session.transcript ?? [];
+    session.transcript.push({ slotId: nextSlotId, question: nextQuestion, answer: "" });
+    session.updated_at = new Date().toISOString();
+    await db.updateMiningSession(session);
+    res.status(200).json({
+      sessionId: session.id,
+      slotIndex: nextIndex,
+      slotName: nameFor(nextSlotId),
+      question: nextQuestion,
+      checkpointNote: null,
+      done: false
+    });
+    return;
+  }
+
   session.transcript = session.transcript ?? [];
   const trailing = session.transcript[session.transcript.length - 1];
   if (trailing && !trailing.answer) {
-    trailing.answer = answer;
+    trailing.answer = answer!;
   } else {
-    session.transcript.push({ slotId, question: "", answer });
+    session.transcript.push({ slotId, question: "", answer: answer! });
   }
 
-  const result = stepSlot(slotId, session.slot_state, answer);
+  const result = stepSlot(slotId, session.slot_state, answer!);
 
   if (result.status === "asking") {
     session.slot_state = result.state;

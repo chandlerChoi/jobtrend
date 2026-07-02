@@ -202,6 +202,11 @@ export const mockBackend: Db = {
     return store.storyCards.filter((c) => c.user_id === userId);
   },
 
+  async updateStoryCard(id, userId, rawAnswers) {
+    const card = store.storyCards.find((c) => c.id === id && c.user_id === userId);
+    if (card) card.raw_answers = rawAnswers;
+  },
+
   async addBookmark(userId, newsId) {
     const existing = store.bookmarks.find((b) => b.user_id === userId && b.news_id === newsId);
     if (existing) return existing;

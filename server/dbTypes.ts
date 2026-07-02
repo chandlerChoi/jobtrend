@@ -69,6 +69,7 @@ export interface Db {
   updateMiningSession(session: StoryMiningSessionRow): Promise<void>;
   createStoryCard(row: Omit<StoryCardRow, "id" | "created_at">): Promise<StoryCardRow>;
   listStoryCards(userId: string): Promise<StoryCardRow[]>;
+  updateStoryCard(id: string, userId: string, rawAnswers: string[]): Promise<void>;
 
   addBookmark(userId: string, newsId: string): Promise<BookmarkRow>;
   removeBookmark(userId: string, newsId: string): Promise<boolean>;
