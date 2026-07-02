@@ -172,3 +172,17 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_chunks(category);
+
+-- 공고별 스토리뱅크 버전 — 사용자가 모집공고 텍스트를 붙여넣으면
+-- RAG + GPT가 개인화된 자소서 섹션을 생성·저장한다.
+CREATE TABLE IF NOT EXISTS story_bank_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  version_name VARCHAR(100) NOT NULL,
+  job_posting_text TEXT,
+  company_name VARCHAR(255),
+  story_content JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sbv_user ON story_bank_versions(user_id);

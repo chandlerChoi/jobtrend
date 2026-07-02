@@ -13,7 +13,8 @@ import type {
   CreditTransactionRow,
   StoryMiningSessionRow,
   StoryCardRow,
-  BookmarkRow
+  BookmarkRow,
+  StoryBankVersion
 } from "../shared/types.js";
 
 export type NewNews = Omit<RecruitmentNewsRow, "id" | "collected_at">;
@@ -72,4 +73,9 @@ export interface Db {
   removeBookmark(userId: string, newsId: string): Promise<boolean>;
   listBookmarkedNews(userId: string): Promise<RecruitmentNewsRow[]>;
   listBookmarkedNewsIds(userId: string): Promise<string[]>;
+
+  createStoryBankVersion(row: Omit<StoryBankVersion, "id" | "created_at" | "updated_at">): Promise<StoryBankVersion>;
+  listStoryBankVersions(userId: string): Promise<StoryBankVersion[]>;
+  updateStoryBankVersion(id: string, userId: string, storyContent: Record<string, string>): Promise<void>;
+  deleteStoryBankVersion(id: string, userId: string): Promise<void>;
 }

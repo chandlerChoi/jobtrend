@@ -16,7 +16,8 @@ import type {
   CreditTransactionRow,
   StoryMiningSessionRow,
   StoryCardRow,
-  BookmarkRow
+  BookmarkRow,
+  StoryBankVersion
 } from "../shared/types.js";
 
 interface Store {
@@ -31,6 +32,7 @@ interface Store {
   storyMiningSessions: StoryMiningSessionRow[];
   storyCards: StoryCardRow[];
   bookmarks: BookmarkRow[];
+  storyBankVersions: StoryBankVersion[];
   seeded: boolean;
 }
 
@@ -50,6 +52,7 @@ function emptyStore(): Store {
     storyMiningSessions: [],
     storyCards: [],
     bookmarks: [],
+    storyBankVersions: [],
     seeded: false
   };
 }
@@ -201,10 +204,14 @@ export const db = {
     return getStore().storyCards;
   },
   get bookmarks() {
-    // Older persisted stores predate this field.
     const store = getStore();
     if (!store.bookmarks) store.bookmarks = [];
     return store.bookmarks;
+  },
+  get storyBankVersions() {
+    const store = getStore();
+    if (!store.storyBankVersions) store.storyBankVersions = [];
+    return store.storyBankVersions;
   }
 };
 

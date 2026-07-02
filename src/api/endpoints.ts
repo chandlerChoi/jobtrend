@@ -5,7 +5,9 @@ import type {
   RecruitmentNewsRow,
   CompanyInfoRow,
   JobFairRow,
-  StoryCardRow
+  StoryCardRow,
+  StoryBankVersion,
+  CoverLetterSection
 } from "../../shared/types";
 
 export interface TrendResponse {
@@ -50,13 +52,18 @@ export function getCompany(companyName: string) {
   return apiFetch<CompanyResponse>(`/companies/${encodeURIComponent(companyName)}`);
 }
 
-// Legacy stubs — kept for hooks that still import them
+// Legacy stubs
 export type NewsFeedResponse = TrendResponse;
-export const getNewsFeed = (companyName?: string) => getTrends({ limit: 50 });
+export const getNewsFeed = (_companyName?: string) => getTrends({ limit: 50 });
 export const listAlerts = () => apiFetch<{ alerts: never[] }>("/alerts");
 export const createAlert = (_p: unknown) => Promise.resolve({ alert: null });
 export const deleteAlert = (id: string) => apiFetch<void>(`/alerts?id=${id}`, { method: "DELETE" });
 export const getDailyDigest = (_date?: string) => Promise.resolve(null);
+
+// chargeCredits is a UI stub — no server endpoint (removed to stay within 12-fn limit)
+export function chargeCredits(_credits: number) {
+  return Promise.resolve({ creditsRemaining: 0, charged: _credits });
+}
 
 export function listJobFairs() {
   return apiFetch<{ fairs: JobFairRow[] }>("/job-fairs");
@@ -89,12 +96,7 @@ export function getCreditBalance() {
   return apiFetch<{ credits: number; planTier: string }>("/credits/balance");
 }
 
-export function chargeCredits(credits: number) {
-  return apiFetch<{ creditsRemaining: number; charged: number }>("/credits/charge", {
-    method: "POST",
-    body: JSON.stringify({ credits })
-  });
-}
+// ── Story Bank ──────────────────────────────────────────────────────────────
 
 export interface StoryBankTurnResponse {
   sessionId: string;
@@ -132,6 +134,58 @@ export interface ActiveMiningSession {
 export function getActiveStoryMiningSession() {
   return apiFetch<{ session: ActiveMiningSession | null }>("/story-bank?active=1");
 }
+
+// ── Story Bank Versions ─────────────────────────────────────────────────────
+
+export function listStoryBankVersions() {
+  return apiFetch<{ versions: StoryBankVersion[] }>("/story-bank?versions=1");
+}
+
+export function createStoryBankVersion(payload: {
+  versionName: string;
+  jobPostingText?: string;
+  companyName?: string;
+}) {
+  return apiFetch<{ version: StoryBankVersion }>("/story-bank?mode=version", {
+    method: "POST",
+    body: JSON.stringify({ action: "create", ...payload })
+  });
+}
+
+export function updateStoryBankVersion(versionId: string, storyContent: Record<string, string>) {
+  return apiFetch<{ ok: boolean }>("/story-bank?mode=version", {
+    method: "POST",
+    body: JSON.stringify({ action: "update", versionId, storyContent })
+  });
+}
+
+export function deleteStoryBankVersion(versionId: string) {
+  return apiFetch<{ ok: boolean }>("/story-bank?mode=version", {
+    method: "POST",
+    body: JSON.stringify({ action: "delete", versionId })
+  });
+}
+
+// ── Cover Letter Analysis ───────────────────────────────────────────────────
+
+export interface CoverLetterAnalysisResponse {
+  sections: CoverLetterSection[];
+  followUpQuestions: { key: string; question: string }[];
+  overallScore: number;
+}
+
+export function analyzeCoverLetter(payload: {
+  coverLetterText: string;
+  jobPostingText?: string;
+  followUpAnswers?: Record<string, string>;
+}) {
+  return apiFetch<CoverLetterAnalysisResponse>("/cover-letter", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+// ── Bookmarks ───────────────────────────────────────────────────────────────
 
 export function listBookmarks() {
   return apiFetch<{ news: RecruitmentNewsRow[]; ids: string[] }>("/bookmarks");

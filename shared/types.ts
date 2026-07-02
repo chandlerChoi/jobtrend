@@ -187,3 +187,33 @@ export interface StoryCardRow {
   status: "slot_complete" | "slot_incomplete";
   created_at: string;
 }
+
+// 공고별 스토리뱅크 버전 — 각 버전은 모집공고에 맞게 커스터마이즈된
+// 자소서 섹션(자기소개/지원동기/직무역량/성장계획)과 면접 힌트를 저장한다.
+export interface StoryBankVersion {
+  id: string;
+  user_id: string;
+  version_name: string;
+  job_posting_text: string | null;
+  company_name: string | null;
+  story_content: Record<string, string>; // section key → text
+  created_at: string;
+  updated_at: string;
+}
+
+// 자소서 분석 결과
+export interface CoverLetterSection {
+  key: string;       // e.g. "intro", "motivation", "competency", "growth"
+  title: string;     // e.g. "자기소개"
+  original: string;
+  score: number;     // 0–100
+  issues: string[];
+  principles: string[];
+  improved: string;
+}
+
+export interface CoverLetterAnalysis {
+  sections: CoverLetterSection[];
+  followUpQuestions: string[];
+  overallScore: number;
+}

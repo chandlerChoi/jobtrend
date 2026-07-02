@@ -217,6 +217,32 @@ export const mockBackend: Db = {
 
   async listBookmarkedNewsIds(userId) {
     return store.bookmarks.filter((b) => b.user_id === userId).map((b) => b.news_id);
+  },
+
+  async createStoryBankVersion(row) {
+    const version = {
+      id: randomUUID(),
+      ...row,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    store.storyBankVersions.push(version);
+    return version;
+  },
+
+  async listStoryBankVersions(userId) {
+    return store.storyBankVersions.filter((v) => v.user_id === userId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  },
+
+  async updateStoryBankVersion(id, userId, storyContent) {
+    const v = store.storyBankVersions.find((v) => v.id === id && v.user_id === userId);
+    if (v) { v.story_content = storyContent; v.updated_at = new Date().toISOString(); }
+  },
+
+  async deleteStoryBankVersion(id, userId) {
+    const idx = store.storyBankVersions.findIndex((v) => v.id === id && v.user_id === userId);
+    if (idx >= 0) store.storyBankVersions.splice(idx, 1);
   }
 };
 

@@ -5,24 +5,12 @@ import { ApiError } from "../api/client";
 import { useCredits } from "../context/CreditContext";
 
 const PERSONAS = [
-  {
-    id: "startup",
-    label: "스타트업 인사담당자",
-    emoji: "🚀",
-    desc: "빠른 질문, 실행력·적응력 중심, 후속 질문 多",
-  },
-  {
-    id: "enterprise",
-    label: "대기업 임원",
-    emoji: "🏢",
-    desc: "격식체, 조직문화 적합성·리더십 중심",
-  },
-  {
-    id: "public",
-    label: "공공기관 면접관",
-    emoji: "🏛️",
-    desc: "구조화된 질문, 공직가치·성실성 중심",
-  },
+  { id: "startup",    label: "스타트업",    emoji: "🚀", desc: "실행력·적응력 중심, 빠른 Q&A" },
+  { id: "enterprise", label: "대기업 임원",  emoji: "🏢", desc: "조직문화·리더십·격식체" },
+  { id: "public",     label: "공공기관",     emoji: "🏛️", desc: "공직가치·성실성·구조화 질문" },
+  { id: "finance",    label: "금융권",       emoji: "💼", desc: "수치 분석력·리스크·윤리의식" },
+  { id: "tech",       label: "테크니컬",     emoji: "💻", desc: "기술 깊이·설계 사고·꼬리질문" },
+  { id: "newcomer",   label: "신입 친화형",  emoji: "🌱", desc: "잠재력·성장가능성·부드러운 어투" },
 ];
 
 export default function InterviewPage() {
@@ -64,23 +52,23 @@ export default function InterviewPage() {
         <p className="mt-1 text-sm font-medium text-brand-600">남은 크레딧: {credits}회</p>
       </div>
 
-      {/* 면접관 페르소나 선택 */}
+      {/* 면접관 페르소나 — 6가지 */}
       <div>
-        <p className="mb-3 text-sm font-semibold text-gray-700">면접관 선택</p>
-        <div className="grid grid-cols-3 gap-3">
+        <p className="mb-3 text-sm font-semibold text-gray-700">면접관 유형 선택</p>
+        <div className="grid grid-cols-3 gap-2.5">
           {PERSONAS.map((p) => (
             <button
               key={p.id}
               onClick={() => setPersona(p.id)}
-              className={`rounded-xl border-2 p-4 text-left transition-all ${
+              className={`rounded-xl border-2 p-3 text-left transition-all ${
                 persona === p.id
                   ? "border-brand-500 bg-brand-50"
                   : "border-gray-200 bg-white hover:border-gray-300"
               }`}
             >
-              <p className="text-2xl mb-2">{p.emoji}</p>
-              <p className="text-sm font-semibold text-gray-900 leading-tight">{p.label}</p>
-              <p className="mt-1 text-xs text-gray-500 leading-tight">{p.desc}</p>
+              <p className="text-xl mb-1">{p.emoji}</p>
+              <p className="text-xs font-semibold text-gray-900 leading-tight">{p.label}</p>
+              <p className="mt-0.5 text-[11px] text-gray-500 leading-tight">{p.desc}</p>
             </button>
           ))}
         </div>
@@ -102,7 +90,7 @@ export default function InterviewPage() {
         <textarea
           value={resume}
           onChange={(e) => setResume(e.target.value)}
-          rows={5}
+          rows={4}
           className="w-full rounded-lg border border-gray-200 bg-white p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           placeholder="이력서 내용을 붙여넣으면 더 맞춤화된 질문을 받을 수 있어요."
         />

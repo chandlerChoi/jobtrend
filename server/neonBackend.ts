@@ -356,5 +356,38 @@ export const neonBackend: Db = {
     const sql = client();
     const rows = await sql`SELECT news_id FROM bookmarks WHERE user_id = ${userId}`;
     return (rows as any[]).map((r) => r.news_id);
+  },
+
+  async createStoryBankVersion(row) {
+    const sql = client();
+    const rows = await sql`
+      INSERT INTO story_bank_versions (user_id, version_name, job_posting_text, company_name, story_content)
+      VALUES (${row.user_id}, ${row.version_name}, ${row.job_posting_text ?? null},
+              ${row.company_name ?? null}, ${JSON.stringify(row.story_content)})
+      RETURNING *
+    `;
+    return rows[0] as any;
+  },
+
+  async listStoryBankVersions(userId) {
+    const sql = client();
+    const rows = await sql`
+      SELECT * FROM story_bank_versions WHERE user_id = ${userId} ORDER BY updated_at DESC
+    `;
+    return rows as any;
+  },
+
+  async updateStoryBankVersion(id, userId, storyContent) {
+    const sql = client();
+    await sql`
+      UPDATE story_bank_versions
+      SET story_content = ${JSON.stringify(storyContent)}, updated_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+  },
+
+  async deleteStoryBankVersion(id, userId) {
+    const sql = client();
+    await sql`DELETE FROM story_bank_versions WHERE id = ${id} AND user_id = ${userId}`;
   }
 };

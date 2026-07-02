@@ -11,16 +11,28 @@ import {
   nameFor,
   TOTAL_SLOTS
 } from "../../server/storyMining.js";
+import { generateVersionContent } from "../../server/claude.js";
 
-// POST /api/story-bank — drives the 10-slot mining interview one turn at a
-// time: { } starts a session, { sessionId, answer } advances it.
-// GET  /api/story-bank — lists the user's completed/incomplete story cards.
-// GET  /api/story-bank?active=1 — returns the in-progress session (with
-// full transcript) so the client can resume where the user left off.
+// POST /api/story-bank — 채굴 세션 시작/이어가기
+//   body {} → 새 세션 시작
+//   body { sessionId, answer } → 현재 질문 답변
+// POST /api/story-bank?mode=version — 공고별 버전 CRUD
+//   body { action:"create", versionName, jobPostingText, companyName } → 생성
+//   body { action:"update", versionId, storyContent } → 내용 저장
+//   body { action:"delete", versionId } → 삭제
+// GET /api/story-bank → 스토리 카드 목록
+// GET /api/story-bank?active=1 → 진행 중 세션
+// GET /api/story-bank?versions=1 → 버전 목록
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   const user = await requireUser(req);
 
+  // ── GET ──────────────────────────────────────────────────────────────────
   if (req.method === "GET") {
+    if (req.query.versions) {
+      const versions = await db.listStoryBankVersions(user.id);
+      res.status(200).json({ versions });
+      return;
+    }
     if (req.query.active) {
       const session = await db.getActiveMiningSession(user.id);
       if (!session) {
@@ -48,12 +60,57 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
+  // ── POST ?mode=version ────────────────────────────────────────────────────
+  if (req.query.mode === "version") {
+    const { action, versionId, versionName, jobPostingText, companyName, storyContent } =
+      (req.body ?? {}) as {
+        action: "create" | "update" | "delete";
+        versionId?: string;
+        versionName?: string;
+        jobPostingText?: string;
+        companyName?: string;
+        storyContent?: Record<string, string>;
+      };
+
+    if (action === "create") {
+      // RAG + GPT로 섹션 초안 생성
+      const cards = await db.listStoryCards(user.id);
+      const cardSummaries = cards.map((c) => c.raw_answers.slice(0, 3).join(" | "));
+      const generatedContent = await generateVersionContent(
+        jobPostingText ?? "",
+        cardSummaries,
+        companyName ?? null
+      );
+      const version = await db.createStoryBankVersion({
+        user_id: user.id,
+        version_name: versionName ?? companyName ?? "새 버전",
+        job_posting_text: jobPostingText ?? null,
+        company_name: companyName ?? null,
+        story_content: generatedContent
+      });
+      res.status(201).json({ version });
+      return;
+    }
+
+    if (action === "update" && versionId) {
+      await db.updateStoryBankVersion(versionId, user.id, storyContent ?? {});
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === "delete" && versionId) {
+      await db.deleteStoryBankVersion(versionId, user.id);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    res.status(400).json({ error: "invalid_action" });
+    return;
+  }
+
+  // ── POST 채굴 세션 ────────────────────────────────────────────────────────
   const { sessionId, answer } = (req.body ?? {}) as { sessionId?: string; answer?: string };
 
-  // Start a new session at slot S01. Transcript entries are appended
-  // when a question is issued (answer: "") and filled in when the user
-  // replies, so the trailing unanswered entry is always "the current
-  // question" on resume.
   if (!sessionId) {
     const firstSlotId = slotIdAt(0)!;
     const firstQuestion = openingFor(firstSlotId);
@@ -94,7 +151,6 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  // Resuming without a new answer — just re-send the current question.
   if (!answer) {
     const pending = (session.transcript ?? []).slice(-1)[0];
     res.status(200).json({
@@ -132,8 +188,6 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  // Slot finished (complete or gave up after max follow-ups) — save the
-  // story card and advance to the next slot, or finish the interview.
   const card = await db.createStoryCard({
     user_id: user.id,
     slot_id: slotId,
@@ -150,12 +204,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     session.status = "completed";
     session.updated_at = new Date().toISOString();
     await db.updateMiningSession(session);
-    res.status(200).json({
-      sessionId: session.id,
-      done: true,
-      lastCard: card,
-      totalSlots: TOTAL_SLOTS
-    });
+    res.status(200).json({ sessionId: session.id, done: true, lastCard: card, totalSlots: TOTAL_SLOTS });
     return;
   }
 
@@ -166,7 +215,6 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   session.updated_at = new Date().toISOString();
   await db.updateMiningSession(session);
 
-  // Checkpoint after slots 5 and 8 (design doc STAGE 3 mid-checkins).
   const checkpointNote =
     nextIndex === 5 || nextIndex === 8
       ? "여기까지의 이야기들 사이에서 공통된 흐름이 보이기 시작해요. 계속 이어가볼게요."

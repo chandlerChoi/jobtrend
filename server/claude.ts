@@ -1,5 +1,7 @@
-// All LLM calls go through OpenAI — ANTHROPIC_API_KEY is no longer used.
+// All LLM calls go through OpenAI. RAG principles are injected into prompts
+// at runtime (searchKnowledge) to reduce token use while improving accuracy.
 import type { InterviewQuestion } from "../shared/types.js";
+import { searchKnowledge, principlesToPrompt } from "./knowledge.js";
 
 const QUESTION_BANK = [
   "이 직무에 지원한 이유와 본인의 강점을 연결해서 설명해주세요.",
@@ -11,10 +13,28 @@ const QUESTION_BANK = [
   "입사 후 3개월 내에 어떤 성과를 내고 싶은가요?"
 ];
 
-const PERSONA_SYSTEM: Record<string, string> = {
-  startup: "당신은 스타트업의 인사담당자입니다. 질문은 짧고 실행력 중심으로 합니다. 실제 경험과 결과를 구체적으로 묻는 질문을 포함하세요.",
-  enterprise: "당신은 대기업의 임원 면접관입니다. 격식체를 사용하고, 조직문화 적합성과 리더십 경험을 중점으로 질문합니다.",
-  public: "당신은 공공기관 면접관입니다. 구조화된 질문 형식을 사용하고, 공직가치·성실성·윤리의식을 평가합니다."
+export const PERSONA_SYSTEM: Record<string, string> = {
+  startup:
+    "당신은 스타트업의 인사담당자입니다. 질문은 짧고 실행력 중심으로 합니다. 실제 경험과 결과를 구체적으로 묻는 질문을 포함하세요.",
+  enterprise:
+    "당신은 대기업의 임원 면접관입니다. 격식체를 사용하고, 조직문화 적합성과 리더십 경험을 중점으로 질문합니다.",
+  public:
+    "당신은 공공기관 면접관입니다. 구조화된 질문 형식을 사용하고, 공직가치·성실성·윤리의식을 평가합니다.",
+  finance:
+    "당신은 금융권(은행/증권/보험) 면접관입니다. 수치 분석력, 리스크 판단력, 윤리의식을 중점 평가합니다. 격식체를 사용하며 STAR 구조의 사례 기반 질문을 선호합니다.",
+  tech:
+    "당신은 IT/테크 기업의 테크니컬 면접관입니다. 기술적 깊이, 문제 해결 과정, 시스템 설계 사고를 평가합니다. 구체적인 기술 스택과 실제 구현 경험을 묻고 꼬리질문을 이어가세요.",
+  newcomer:
+    "당신은 신입 지원자에게 특화된 친화적 면접관입니다. 학교 활동, 인턴/아르바이트 경험, 팀 프로젝트를 중심으로 잠재력과 성장 가능성을 평가합니다. 부드러운 어투를 사용하세요.",
+};
+
+export const PERSONA_LABELS: Record<string, string> = {
+  startup: "스타트업 인사담당자",
+  enterprise: "대기업 임원",
+  public: "공공기관 면접관",
+  finance: "금융권 면접관",
+  tech: "테크니컬 면접관",
+  newcomer: "신입 친화형 면접관",
 };
 
 async function callOpenAI(system: string, user: string, model = "gpt-4.1-mini"): Promise<string> {
@@ -54,7 +74,6 @@ export async function generateInterviewQuestions(
   try {
     const system = `${PERSONA_SYSTEM[persona] ?? PERSONA_SYSTEM.startup} 주어진 JD와 이력서를 바탕으로 실제 면접에서 나올 가능성이 높은 질문 ${count}개를 생성하세요. 문자열 배열 JSON으로만 응답하세요. 예: ["질문1","질문2"]`;
     const raw = await callOpenAI(system, `JD: ${jobDescription}\n이력서: ${resumeText ?? "미제공"}`);
-    // Extract JSON array from response
     const match = raw.match(/\[[\s\S]*\]/);
     const parsed = JSON.parse(match ? match[0] : raw) as string[];
     return parsed.slice(0, count).map((text, i) => ({ id: i + 1, text, order: i + 1 }));
@@ -84,11 +103,125 @@ export async function evaluateAnswer(
 ): Promise<{ strengths: string[]; improvements: string[]; quickTip?: string }> {
   if (!process.env.OPENAI_API_KEY) return mockFeedback(answerText);
   try {
-    const system = `지원자 답변을 구체성·직무연관성·논리성 기준으로 평가하세요. 반드시 JSON으로만 응답: {"strengths":["강점1","강점2"],"improvements":["보완점1","보완점2"],"quickTip":"즉각 실천 가이드 1줄"}`;
+    // RAG: retrieve coaching principles relevant to this Q&A
+    const hits = await searchKnowledge(`${questionText} ${answerText}`, { limit: 3 });
+    const principles = principlesToPrompt(hits);
+
+    const system = [
+      principles,
+      "지원자 답변을 구체성·직무연관성·논리성 기준으로 평가하세요.",
+      "반드시 JSON으로만 응답: {\"strengths\":[\"강점1\",\"강점2\"],\"improvements\":[\"보완점1\",\"보완점2\"],\"quickTip\":\"즉각 실천 가이드 1줄\"}"
+    ].filter(Boolean).join("\n\n");
+
     const raw = await callOpenAI(system, `질문: ${questionText}\n답변: ${answerText}`);
     const match = raw.match(/\{[\s\S]*\}/);
     return JSON.parse(match ? match[0] : raw) as { strengths: string[]; improvements: string[]; quickTip?: string };
   } catch {
     return mockFeedback(answerText);
+  }
+}
+
+// 자소서 분석 — RAG 원칙 기반 섹션별 진단 + 꼬리질문 + 개선본 생성
+export async function analyzeCoverLetter(
+  coverLetterText: string,
+  jobPostingText: string | null,
+  followUpAnswers: Record<string, string> | null
+): Promise<{
+  sections: { key: string; title: string; original: string; score: number; issues: string[]; principles: string[]; improved: string }[];
+  followUpQuestions: { key: string; question: string }[];
+  overallScore: number;
+}> {
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      sections: [{ key: "intro", title: "자기소개", original: coverLetterText.slice(0, 200), score: 60, issues: ["더 구체적인 경험을 추가하세요"], principles: ["하나의 핵심 키워드로 집중하라"], improved: "" }],
+      followUpQuestions: [{ key: "q1", question: "가장 힘들었던 경험은 무엇인가요?" }],
+      overallScore: 60
+    };
+  }
+
+  // 1. RAG에서 자소서 관련 원칙 검색
+  const ragHits = await searchKnowledge(
+    `자기소개서 ${jobPostingText ? "직무 지원동기" : "작성법"}`,
+    { category: "자소서팁", limit: 4 }
+  );
+  const ragFallback = await searchKnowledge("면접 자기소개서 작성", { limit: 4 });
+  const allHits = [...ragHits, ...ragFallback].slice(0, 5);
+  const principles = principlesToPrompt(allHits);
+
+  const prompt = [
+    jobPostingText ? `[모집공고]\n${jobPostingText.slice(0, 2000)}\n` : "",
+    `[자기소개서 원문]\n${coverLetterText.slice(0, 5000)}`,
+    followUpAnswers ? `\n[꼬리질문 답변]\n${Object.entries(followUpAnswers).map(([k, v]) => `${k}: ${v}`).join("\n")}` : "",
+    "",
+    "위 자기소개서를 분석하여 다음 JSON으로 응답하세요:",
+    '{"overallScore": 0~100, "sections": [{"key":"intro|motivation|competency|growth|other","title":"섹션명","original":"원문(최대200자)","score":0~100,"issues":["문제점1","문제점2"],"principles":["적용할원칙"],"improved":"개선된버전(followUpAnswers가 있을 때만 작성, 없으면 빈문자열)"}],"followUpQuestions":[{"key":"q1","question":"꼬리질문"}]}',
+    "",
+    "규칙:",
+    "- sections: 자기소개서를 최대 4개 섹션으로 분류 (자기소개/지원동기/직무역량/성장계획)",
+    "- issues: 각 섹션의 구체성·차별성·논리성 문제점 2~3개",
+    "- principles: RAG 원칙 중 이 섹션에 적용 가능한 것 1~2개",
+    "- improved: followUpAnswers가 제공된 경우에만 개선본 작성 (글자수 300~600자)",
+    "- followUpQuestions: 원문에서 모호한 부분을 파고드는 꼬리질문 3~5개",
+    principles ? `\n[참고 코칭 원칙]\n${principles}` : ""
+  ].filter(Boolean).join("\n");
+
+  try {
+    const raw = await callOpenAI(
+      "자기소개서 전문 코치입니다. 지시에 따라 JSON만 출력하세요.",
+      prompt,
+      "gpt-4.1-mini"
+    );
+    const match = raw.match(/\{[\s\S]*\}/);
+    return JSON.parse(match ? match[0] : raw);
+  } catch {
+    return {
+      sections: [{ key: "full", title: "전체", original: coverLetterText.slice(0, 200), score: 50, issues: ["분석 중 오류가 발생했습니다"], principles: [], improved: "" }],
+      followUpQuestions: [{ key: "q1", question: "이 경험에서 본인의 역할은 구체적으로 무엇이었나요?" }],
+      overallScore: 50
+    };
+  }
+}
+
+// 공고별 스토리뱅크 버전 생성 — RAG 원칙 + 사용자 스토리카드 → 맞춤 자소서 섹션
+export async function generateVersionContent(
+  jobPostingText: string,
+  storyCardSummaries: string[],
+  companyName: string | null
+): Promise<Record<string, string>> {
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      intro: "저는 [핵심 역량]을 갖춘 지원자입니다.",
+      motivation: `${companyName ?? "귀사"}에 지원하게 된 이유는...`,
+      competency: "직무 역량 측면에서...",
+      growth: "입사 후 성장 계획으로..."
+    };
+  }
+
+  const hits = await searchKnowledge(`${companyName ?? ""} 자기소개서 지원동기 직무역량`, { limit: 5 });
+  const principles = principlesToPrompt(hits);
+
+  const stories = storyCardSummaries.slice(0, 5).map((s, i) => `스토리 ${i + 1}: ${s}`).join("\n");
+
+  const prompt = [
+    `[모집공고]\n${jobPostingText.slice(0, 3000)}`,
+    stories ? `\n[지원자 스토리뱅크]\n${stories}` : "",
+    principles ? `\n[코칭 원칙]\n${principles}` : "",
+    "",
+    "위 정보를 활용해 이 공고에 최적화된 자기소개서 4개 섹션을 JSON으로 작성하세요:",
+    '{"intro":"자기소개(400자 내외)","motivation":"지원동기(400자 내외)","competency":"직무역량(400자 내외)","growth":"성장계획(300자 내외)"}',
+    "",
+    "규칙: 지원자 스토리에서 공고 요구사항에 가장 잘 맞는 경험을 선택·조합. 구체적 수치와 STAR 구조 활용. 추상적 표현 금지."
+  ].filter(Boolean).join("\n");
+
+  try {
+    const raw = await callOpenAI(
+      "자기소개서 전문 코치입니다. 지시에 따라 JSON만 출력하세요.",
+      prompt,
+      "gpt-4.1-mini"
+    );
+    const match = raw.match(/\{[\s\S]*\}/);
+    return JSON.parse(match ? match[0] : raw);
+  } catch {
+    return { intro: "", motivation: "", competency: "", growth: "" };
   }
 }
