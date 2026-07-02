@@ -151,3 +151,24 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   UNIQUE(user_id, news_id)
 );
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
+
+-- RAG knowledge base — principle cards distilled (one-time GPT batch,
+-- db/ingest-knowledge.ts) from YouTube interview/cover-letter coaching
+-- transcripts dropped in knowledge/raw/*.txt. Runtime feedback searches
+-- these by cosine similarity instead of sending full context to OpenAI.
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_title VARCHAR(255) NOT NULL,
+  source_url TEXT,
+  category VARCHAR(20) NOT NULL,        -- 면접팁 | 자소서팁 | 이력서팁
+  stage VARCHAR(20),                    -- 자소서작성 | 면접준비 | 면접당일
+  question_types TEXT[] DEFAULT '{}',   -- 자기소개, 지원동기, 갈등해결, ...
+  claim TEXT NOT NULL,                  -- 원칙 한 문장
+  why TEXT,                             -- 근거/이유
+  example TEXT,                         -- 적용 예시
+  content TEXT NOT NULL,                -- claim+why+example 합본 (임베딩 원문)
+  embedding vector(1536),               -- text-embedding-3-small
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_chunks(category);
