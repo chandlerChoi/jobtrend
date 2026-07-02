@@ -7,8 +7,8 @@ function mapAuthError(message: string): string {
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState<"google" | "kakao" | null>(null);
-  const { googleLogin, kakaoLogin } = useAuth();
+  const [submitting, setSubmitting] = useState<"google" | null>(null);
+  const { googleLogin } = useAuth();
 
   async function handleGoogle() {
     setSubmitting("google");
@@ -19,16 +19,6 @@ export default function LoginPage() {
       setSubmitting(null);
     }
     // 성공 시 Supabase가 OAuth 페이지로 리다이렉트하므로 여기서 할 일 없음
-  }
-
-  async function handleKakao() {
-    setSubmitting("kakao");
-    setError(null);
-    const { error } = await kakaoLogin();
-    if (error) {
-      setError(mapAuthError(error));
-      setSubmitting(null);
-    }
   }
 
   return (
@@ -54,15 +44,6 @@ export default function LoginPage() {
               <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.95l2.99 2.34C4.66 5.16 6.65 3.58 9 3.58z" />
             </svg>
             {submitting === "google" ? "이동 중..." : "Google로 시작하기"}
-          </button>
-
-          <button
-            onClick={handleKakao}
-            disabled={submitting !== null}
-            className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#FEE500] py-3 text-sm font-medium text-black hover:brightness-95 disabled:opacity-50 transition-all"
-          >
-            <span className="text-base">🗨️</span>
-            {submitting === "kakao" ? "이동 중..." : "카카오로 시작하기"}
           </button>
         </div>
 

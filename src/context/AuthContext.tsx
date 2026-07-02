@@ -7,7 +7,6 @@ interface AuthContextValue {
   session: Session | null;
   loading: boolean;
   googleLogin: () => Promise<{ error: string | null }>;
-  kakaoLogin: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   userId: string;
 }
@@ -55,19 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   }
 
-  async function kakaoLogin() {
-    // account_email scope requires Kakao business verification — request
-    // only profile_nickname so login works on unverified apps.
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "kakao",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: "profile_nickname"
-      }
-    });
-    return { error: error?.message ?? null };
-  }
-
   async function signOut() {
     await supabase.auth.signOut();
   }
@@ -76,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userId = user?.id ?? getGuestId();
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, googleLogin, kakaoLogin, signOut, userId }}>
+    <AuthContext.Provider value={{ user, session, loading, googleLogin, signOut, userId }}>
       {children}
     </AuthContext.Provider>
   );
