@@ -108,6 +108,7 @@ export interface InterviewSummary {
 export interface InterviewSessionRow {
   id: string;
   user_id: string;
+  persona_type: string;
   jd_text: string;
   resume_text: string | null;
   questions_json: InterviewQuestion[];

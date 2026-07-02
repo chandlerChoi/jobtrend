@@ -235,9 +235,9 @@ export const neonBackend: Db = {
   async createInterviewSession(row: InterviewSessionRow) {
     const sql = client();
     await sql`
-      INSERT INTO interview_sessions (id, user_id, jd_text, resume_text, questions_json, answers_json, feedback_json, status)
+      INSERT INTO interview_sessions (id, user_id, persona_type, jd_text, resume_text, questions_json, answers_json, feedback_json, status)
       VALUES (
-        ${row.id}, ${row.user_id}, ${row.jd_text}, ${row.resume_text},
+        ${row.id}, ${row.user_id}, ${row.persona_type ?? "startup"}, ${row.jd_text}, ${row.resume_text},
         ${JSON.stringify(row.questions_json)}, ${JSON.stringify(row.answers_json)},
         ${row.feedback_json ? JSON.stringify(row.feedback_json) : null}, ${row.status}
       )
@@ -248,6 +248,17 @@ export const neonBackend: Db = {
     const sql = client();
     const rows = await sql`SELECT * FROM interview_sessions WHERE id = ${id} AND user_id = ${userId}`;
     return (rows[0] as any) ?? null;
+  },
+
+  async listInterviewSessions(userId, limit = 20) {
+    const sql = client();
+    const rows = await sql`
+      SELECT * FROM interview_sessions
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return rows as any;
   },
 
   async updateInterviewSession(session) {

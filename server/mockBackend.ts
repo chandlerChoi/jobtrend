@@ -156,6 +156,13 @@ export const mockBackend: Db = {
     store.interviewSessions.push(row);
   },
 
+  async listInterviewSessions(userId, limit = 20) {
+    return store.interviewSessions
+      .filter((s) => s.user_id === userId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, limit);
+  },
+
   async getInterviewSession(id, userId) {
     return store.interviewSessions.find((s) => s.id === id && s.user_id === userId) ?? null;
   },

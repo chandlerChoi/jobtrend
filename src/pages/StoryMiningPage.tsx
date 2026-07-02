@@ -529,13 +529,13 @@ function VersionsTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
 // 메인 — 탭 셸 + 북마크 사이드바
 // ─────────────────────────────────────────────────────────────────────────────
 const TABS: { id: Tab; label: string }[] = [
-  { id: "mining",   label: "스토리 채굴" },
   { id: "cover",    label: "자소서 분석" },
   { id: "versions", label: "공고별 버전" },
+  { id: "mining",   label: "스토리 채굴" },
 ];
 
 export default function StoryMiningPage() {
-  const [tab, setTab] = useState<Tab>("mining");
+  const [tab, setTab] = useState<Tab>("cover");
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarks, setBookmarks] = useState<RecruitmentNewsRow[]>([]);
 

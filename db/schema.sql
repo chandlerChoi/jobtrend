@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS daily_digests (
 CREATE TABLE IF NOT EXISTS interview_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  persona_type VARCHAR(30) NOT NULL DEFAULT 'startup',
   jd_text TEXT NOT NULL,
   resume_text TEXT,
   questions_json JSONB NOT NULL,
@@ -99,6 +100,7 @@ CREATE TABLE IF NOT EXISTS interview_sessions (
   status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS persona_type VARCHAR(30) NOT NULL DEFAULT 'startup';
 
 CREATE TABLE IF NOT EXISTS credit_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

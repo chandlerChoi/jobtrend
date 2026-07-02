@@ -79,6 +79,31 @@ export function startInterview(payload: { jdText: string; resumeText?: string; p
   return apiFetch<StartInterviewResponse>("/interview/start", { method: "POST", body: JSON.stringify(payload) });
 }
 
+export interface InterviewSessionSummary {
+  id: string;
+  persona_type: string;
+  jd_text: string;
+  status: string;
+  created_at: string;
+  averageScore: number | null;
+  questionCount: number;
+  answeredCount: number;
+}
+
+export function listInterviewSessions() {
+  return apiFetch<{ sessions: InterviewSessionSummary[] }>("/interview/start");
+}
+
+export interface InterviewDetailResponse {
+  averageScore: number;
+  overallStrengths: string[];
+  overallImprovements: string[];
+  history: { question: string; answer: string; score: number; feedback: { strengths: string[]; improvements: string[]; quickTip?: string } }[];
+  questions: InterviewQuestion[];
+  personaType: string;
+  jdText: string;
+}
+
 export interface AnswerResponse {
   feedback: { strengths: string[]; improvements: string[]; quickTip?: string };
   nextQuestionId: number | null;
@@ -90,6 +115,10 @@ export function submitAnswer(payload: { sessionId: string; questionId: number; a
 
 export function getInterviewSummary(sessionId: string) {
   return apiFetch<InterviewSummary>(`/interview/${sessionId}/summary`);
+}
+
+export function getInterviewDetail(sessionId: string) {
+  return apiFetch<InterviewDetailResponse>(`/interview/${sessionId}/summary`);
 }
 
 export function getCreditBalance() {

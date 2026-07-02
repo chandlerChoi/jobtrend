@@ -5,6 +5,8 @@ import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import ChatBubble from "../components/feature/ChatBubble";
 import type { InterviewQuestion } from "../../shared/types";
 
+type HintMode = "none" | "keywords";
+
 function MicIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -21,10 +23,61 @@ function StopIcon() {
   );
 }
 
+// 스니펫에서 키워드 칩 추출 (구두점 기준 분리 + 짧은 단어 제거)
+function extractKeywords(snippet: string): string[] {
+  const chunks = snippet
+    .replace(/[.。]/g, "||")
+    .split("||")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 4 && s.length < 40);
+  return chunks.slice(0, 5);
+}
+
+interface StoryHintBoxProps {
+  hint: { slotName: string; snippet: string };
+  mode: HintMode;
+}
+
+function StoryHintBox({ hint, mode }: StoryHintBoxProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (mode === "none") return null;
+
+  const keywords = extractKeywords(hint.snippet);
+
+  return (
+    <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-brand-700">💡 스토리 키워드 — {hint.slotName}</p>
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="text-[10px] text-brand-500 hover:underline"
+        >
+          {expanded ? "접기" : "전체 보기"}
+        </button>
+      </div>
+      {/* 키워드 칩 */}
+      <div className="flex flex-wrap gap-1.5">
+        {keywords.map((kw, i) => (
+          <span key={i} className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+            {kw}
+          </span>
+        ))}
+      </div>
+      {/* 전체 스니펫 (확장 시) */}
+      {expanded && (
+        <p className="text-xs text-gray-600 leading-relaxed border-t border-brand-100 pt-2">{hint.snippet}</p>
+      )}
+    </div>
+  );
+}
+
 export default function InterviewSessionPage() {
   const { sessionId = "" } = useParams();
   const location = useLocation();
-  const questions = (location.state as { questions?: InterviewQuestion[] } | null)?.questions ?? [];
+  const state = (location.state as { questions?: InterviewQuestion[]; hintMode?: HintMode } | null);
+  const questions = state?.questions ?? [];
+  const hintMode: HintMode = state?.hintMode ?? "keywords";
 
   const { currentQuestion, step, totalSteps, history, summary, isComplete, submitting, answer } =
     useInterviewSession(sessionId, questions);
@@ -49,7 +102,15 @@ export default function InterviewSessionPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 animate-fadeUp">
-      {/* Progress bar */}
+      {/* 힌트 모드 배지 */}
+      <div className="flex items-center justify-between">
+        <span />
+        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${hintMode === "keywords" ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"}`}>
+          {hintMode === "keywords" ? "💡 키워드 힌트 모드" : "🎯 자유 모드"}
+        </span>
+      </div>
+
+      {/* 진행 바 */}
       {!isComplete && (
         <div>
           <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -70,18 +131,12 @@ export default function InterviewSessionPage() {
           <div key={i} className="space-y-2">
             <ChatBubble role="interviewer">{h.question}</ChatBubble>
             <ChatBubble role="candidate">{h.answer}</ChatBubble>
-
-            {/* 실시간 코칭 */}
             <div className="ml-2 rounded-lg bg-gray-50 border border-gray-100 px-4 py-3 space-y-1.5">
               {h.feedback.strengths.map((s, j) => (
-                <p key={`s${j}`} className="text-sm text-brand-600">
-                  <span className="font-bold">+</span> {s}
-                </p>
+                <p key={`s${j}`} className="text-sm text-brand-600"><span className="font-bold">+</span> {s}</p>
               ))}
               {h.feedback.improvements.map((s, j) => (
-                <p key={`i${j}`} className="text-sm text-amber-600">
-                  <span className="font-bold">!</span> {s}
-                </p>
+                <p key={`i${j}`} className="text-sm text-amber-600"><span className="font-bold">!</span> {s}</p>
               ))}
               {(h.feedback as { quickTip?: string }).quickTip && (
                 <p className="text-sm text-gray-500 italic border-t border-gray-200 pt-1.5 mt-1.5">
@@ -93,36 +148,35 @@ export default function InterviewSessionPage() {
         ))}
 
         {!isComplete && currentQuestion && (
-          <ChatBubble role="interviewer">
-            {currentQuestion.text}
-          </ChatBubble>
+          <ChatBubble role="interviewer">{currentQuestion.text}</ChatBubble>
         )}
       </div>
 
       {!isComplete && currentQuestion && (
         <div className="space-y-3">
+          {/* 키워드 힌트 (모드에 따라 표시) */}
           {currentQuestion.storyHint && (
-            <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
-              <p className="text-xs font-semibold text-brand-600 mb-1">
-                💡 참고할 스토리 — {currentQuestion.storyHint.slotName}
-              </p>
-              <p className="text-sm text-gray-600 leading-relaxed">{currentQuestion.storyHint.snippet}</p>
-            </div>
+            <StoryHintBox hint={currentQuestion.storyHint} mode={hintMode} />
           )}
+
           <div className="relative">
             <textarea
               value={answerText}
               onChange={(e) => setAnswerText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && e.ctrlKey) handleSubmit(); }}
               rows={5}
               className="w-full rounded-xl border border-gray-200 bg-white p-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              placeholder={listening ? "음성을 인식하는 중..." : "답변을 입력하거나 마이크를 눌러 말씀하세요."}
+              placeholder={listening ? "음성을 인식하는 중..." : "답변을 입력하거나 마이크를 눌러 말씀하세요. (Ctrl+Enter로 제출)"}
             />
-            {listening && (
-              <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-red-100 px-2 py-1">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                <span className="text-xs text-red-500">녹음 중</span>
-              </div>
-            )}
+            <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+              <span className="text-xs text-gray-300">{answerText.length}자</span>
+              {listening && (
+                <span className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                  <span className="text-[10px] text-red-500">녹음 중</span>
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -130,11 +184,8 @@ export default function InterviewSessionPage() {
               <button
                 onClick={handleMicClick}
                 disabled={submitting}
-                title={listening ? "클릭하면 녹음 중지" : "마이크로 답변하기"}
                 className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-40 ${
-                  listening
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  listening ? "bg-red-500 text-white hover:bg-red-600" : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                 }`}
               >
                 {listening ? <StopIcon /> : <MicIcon />}
@@ -175,12 +226,9 @@ export default function InterviewSessionPage() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
-            >
-              다시 연습하기
-            </button>
+            <a href="/mypage" className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-center text-gray-600 hover:bg-gray-50">
+              면접 기록 보기
+            </a>
             <a href="/news" className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white text-center hover:bg-brand-600">
               다른 공고 찾기
             </a>

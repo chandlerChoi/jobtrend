@@ -60,6 +60,7 @@ export interface Db {
 
   createInterviewSession(row: InterviewSessionRow): Promise<void>;
   getInterviewSession(id: string, userId: string): Promise<InterviewSessionRow | null>;
+  listInterviewSessions(userId: string, limit?: number): Promise<InterviewSessionRow[]>;
   updateInterviewSession(session: InterviewSessionRow): Promise<void>;
 
   createMiningSession(row: StoryMiningSessionRow): Promise<void>;

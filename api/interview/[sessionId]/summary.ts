@@ -14,7 +14,12 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   }
 
   if (session.answers_json.length === 0) {
-    res.status(200).json({ averageScore: 0, overallStrengths: [], overallImprovements: [] });
+    res.status(200).json({
+      averageScore: 0, overallStrengths: [], overallImprovements: [],
+      history: [], questions: session.questions_json,
+      personaType: session.persona_type ?? "startup",
+      jdText: session.jd_text
+    });
     return;
   }
 
@@ -23,8 +28,21 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   const overallStrengths = Array.from(new Set(session.answers_json.flatMap((a) => a.feedback.strengths))).slice(0, 3);
   const overallImprovements = Array.from(new Set(session.answers_json.flatMap((a) => a.feedback.improvements))).slice(0, 3);
 
-  session.feedback_json = { averageScore, overallStrengths, overallImprovements };
+  const feedback = { averageScore, overallStrengths, overallImprovements };
+  session.feedback_json = feedback;
   await db.updateInterviewSession(session);
 
-  res.status(200).json(session.feedback_json);
+  // 전체 Q&A 이력 함께 반환 (다시보기 기능용)
+  const history = session.answers_json.map((a) => {
+    const q = session.questions_json.find((q) => q.id === a.questionId);
+    return { question: q?.text ?? "", answer: a.answerText, score: a.score, feedback: a.feedback };
+  });
+
+  res.status(200).json({
+    ...feedback,
+    history,
+    questions: session.questions_json,
+    personaType: session.persona_type ?? "startup",
+    jdText: session.jd_text
+  });
 });
