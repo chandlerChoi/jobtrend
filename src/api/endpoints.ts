@@ -16,11 +16,18 @@ export interface TrendResponse {
   lastUpdated: string;
 }
 
-export function getTrends(params?: { industry?: string; size?: string; region?: string; limit?: number }) {
+export function getTrends(params?: {
+  industry?: string;
+  size?: string;
+  keyword?: string;
+  employmentType?: string;
+  limit?: number;
+}) {
   const q = new URLSearchParams();
   if (params?.industry) q.set("industry", params.industry);
   if (params?.size) q.set("size", params.size);
-  if (params?.region) q.set("region", params.region);
+  if (params?.keyword) q.set("keyword", params.keyword);
+  if (params?.employmentType) q.set("employmentType", params.employmentType);
   if (params?.limit) q.set("limit", String(params.limit));
   return apiFetch<TrendResponse>(`/trends?${q}`);
 }

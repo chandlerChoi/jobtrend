@@ -28,7 +28,14 @@ export interface Db {
     balanceAfter: number
   ): Promise<void>;
 
-  listRecruitmentNews(opts: { companyName?: string; limit?: number }): Promise<RecruitmentNewsRow[]>;
+  listRecruitmentNews(opts: {
+    companyName?: string;
+    limit?: number;
+    keyword?: string;       // title OR company_name ILIKE
+    size?: string;          // company_type 매핑 (대기업/중견/중소/공공)
+    industry?: string;      // title 키워드 매핑
+    employmentType?: string; // employment_types ANY
+  }): Promise<RecruitmentNewsRow[]>;
   getRecruitmentNewsByDate(date: string): Promise<RecruitmentNewsRow[]>;
   insertNewsIfNew(news: NewNews): Promise<boolean>;
   countNews(): Promise<number>;

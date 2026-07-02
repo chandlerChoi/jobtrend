@@ -45,10 +45,13 @@ async function generateInsight(
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
   const industry = req.query.industry ? String(req.query.industry) : undefined;
+  const size = req.query.size ? String(req.query.size) : undefined;
+  const keyword = req.query.keyword ? String(req.query.keyword) : undefined;
+  const employmentType = req.query.employmentType ? String(req.query.employmentType) : undefined;
   const limit = req.query.limit ? Number(req.query.limit) : 50;
 
   const [news, trend, total] = await Promise.all([
-    db.listRecruitmentNews({ limit }),
+    db.listRecruitmentNews({ limit, industry, size, keyword, employmentType }),
     db.recentNewsTrend(7),
     db.countNews()
   ]);

@@ -25,9 +25,45 @@ export const mockBackend: Db = {
     recordTx(userId, type, amount, balanceAfter);
   },
 
-  async listRecruitmentNews({ companyName, limit = 50 }) {
+  async listRecruitmentNews({ companyName, limit = 50, keyword, size, industry, employmentType }) {
+    const INDUSTRY_KEYWORDS: Record<string, string[]> = {
+      "IT·SW":   ["IT", "소프트웨어", "개발", "정보", "시스템", "클라우드", "데이터", "AI"],
+      "제조":    ["제조", "생산", "공장", "엔지니어링", "기계", "전자"],
+      "금융":    ["금융", "은행", "보험", "증권", "투자", "핀테크"],
+      "공공기관":["공공", "기관", "공사"],
+      "유통·서비스": ["유통", "서비스", "물류", "리테일", "판매"],
+    };
+    const SIZE_MAP: Record<string, string[]> = {
+      "대기업": ["대기업"],
+      "중견":   ["중견기업"],
+      "중소":   ["중소기업", "벤처기업"],
+      "공공":   ["공공기관"],
+    };
+
     let rows = store.recruitmentNews;
     if (companyName) rows = rows.filter((n) => n.company_name === companyName);
+    if (keyword) {
+      const kw = keyword.toLowerCase();
+      rows = rows.filter((n) =>
+        n.title.toLowerCase().includes(kw) || n.company_name.toLowerCase().includes(kw)
+      );
+    }
+    if (size) {
+      const types = SIZE_MAP[size] ?? [size];
+      rows = rows.filter((n) => n.company_type && types.includes(n.company_type));
+    }
+    if (industry) {
+      const kws = INDUSTRY_KEYWORDS[industry] ?? [industry];
+      rows = rows.filter((n) =>
+        kws.some((kw) =>
+          n.title.toLowerCase().includes(kw.toLowerCase()) ||
+          n.company_name.toLowerCase().includes(kw.toLowerCase())
+        )
+      );
+    }
+    if (employmentType) {
+      rows = rows.filter((n) => n.employment_types.includes(employmentType));
+    }
     return [...rows].sort((a, b) => (b.posted_at ?? "").localeCompare(a.posted_at ?? "")).slice(0, limit);
   },
 

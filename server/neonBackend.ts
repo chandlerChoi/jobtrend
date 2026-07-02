@@ -52,14 +52,53 @@ export const neonBackend: Db = {
     `;
   },
 
-  async listRecruitmentNews({ companyName, limit = 50 }) {
+  async listRecruitmentNews({ companyName, limit = 50, keyword, size, industry, employmentType }) {
     const sql = client();
-    const rows = companyName
-      ? await sql`
-          SELECT * FROM recruitment_news WHERE company_name = ${companyName}
-          ORDER BY posted_at DESC NULLS LAST LIMIT ${limit}
-        `
-      : await sql`SELECT * FROM recruitment_news ORDER BY posted_at DESC NULLS LAST LIMIT ${limit}`;
+
+    // industry → title 키워드 매핑
+    const INDUSTRY_KEYWORDS: Record<string, string[]> = {
+      "IT·SW":   ["IT", "소프트웨어", "개발", "정보", "시스템", "클라우드", "데이터", "AI"],
+      "제조":    ["제조", "생산", "공장", "엔지니어링", "기계", "전자"],
+      "금융":    ["금융", "은행", "보험", "증권", "투자", "핀테크"],
+      "공공기관":["공공", "기관", "공사", "청", "원"],
+      "유통·서비스": ["유통", "서비스", "물류", "리테일", "판매"],
+    };
+    const industryKw = industry ? (INDUSTRY_KEYWORDS[industry] ?? [industry]) : [];
+
+    // size → company_type 매핑
+    const SIZE_MAP: Record<string, string[]> = {
+      "대기업": ["대기업"],
+      "중견":   ["중견기업"],
+      "중소":   ["중소기업", "벤처기업"],
+      "공공":   ["공공기관"],
+    };
+    const sizeTypes = size ? (SIZE_MAP[size] ?? [size]) : [];
+
+    const rows = await sql`
+      SELECT * FROM recruitment_news
+      WHERE
+        -- companyName 필터
+        (${companyName ?? null}::text IS NULL OR company_name = ${companyName ?? null})
+        -- keyword 검색 (제목 OR 기업명)
+        AND (${keyword ?? null}::text IS NULL
+             OR title ILIKE '%' || ${keyword ?? null} || '%'
+             OR company_name ILIKE '%' || ${keyword ?? null} || '%')
+        -- size 필터 (company_type)
+        AND (${sizeTypes.length === 0}
+             OR company_type = ANY(${sizeTypes}))
+        -- industry 필터 (title 키워드 OR 매칭)
+        AND (${industryKw.length === 0}
+             OR EXISTS (
+               SELECT 1 FROM unnest(${industryKw}::text[]) AS kw
+               WHERE title ILIKE '%' || kw || '%'
+                  OR company_name ILIKE '%' || kw || '%'
+             ))
+        -- employmentType 필터
+        AND (${employmentType ?? null}::text IS NULL
+             OR ${employmentType ?? null} = ANY(employment_types))
+      ORDER BY posted_at DESC NULLS LAST
+      LIMIT ${limit}
+    `;
     return rows as any;
   },
 
