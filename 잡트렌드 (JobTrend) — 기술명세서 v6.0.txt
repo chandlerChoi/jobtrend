@@ -1,0 +1,95 @@
+잡트렌드 (JobTrend) — 기술명세서 v6.0
+==========================================
+(v5.0 대비 변경분만 기록. 이전 스펙은 v5.0 문서 참고)
+
+1. 배경
+--------
+v5.0까지는 트렌드 대시보드(F1) + AI 모의면접(F4)이 핵심이었음.
+이번 버전은 "스토리를 어떻게 채굴하고 재사용하는가"라는 별도 축을
+F5로 신규 도입. 자소서/면접 어디에 쓰이든 "10개의 원재료 스토리"가
+공통 축이 되도록 설계 — RAG/자소서 도우미(F6)의 데이터 기반이 되는
+선행 기능.
+
+2. 신규 기능 — F5. 스토리뱅크 채굴 인터뷰
+------------------------------------------
+경로: /story-bank (PrivateRoute, 로그인 필요)
+
+설계 원칙 (원본 설계 문서 3원칙 반영):
+  1) 오프닝은 넓게, 후속 질문은 모듈 타겟팅
+  2) 추상적 답변 감지 → 즉시 사례화 요구
+  3) 슬롯 진행에 따라 누적 체크포인트 노출 (S05, S08 완료 시)
+
+10개 슬롯 (server/storyMining.ts:SLOT_TEMPLATES):
+  S01 입문/전환    S02 실패·좌절     S03 갈등·이견
+  S04 주도·이니셔티브  S05 압박·마감   S06 숫자/성과
+  S07 학습·전환    S08 리더십/영향력  S09 가치관 충돌
+  S10 미래연결
+
+슬롯당 6개 모듈 감지: situation / friction / action /
+result_quant / result_qual / reflection
+
+동작 방식:
+  - 사용자 답변 → 정규식 기반 추상성 감지(detectAbstraction) +
+    모듈 채움 판정(inferFilledModules)
+  - 미채움 모듈이 있으면 해당 모듈을 겨냥한 후속 질문 (최대 3회)
+  - 3회 초과 시 "slot_incomplete"로 표시하고 다음 슬롯으로 강제 진행
+    (무한루프 방지)
+  - 슬롯 완료 시 story_cards 테이블에 카드 1건 저장, 다음 슬롯으로 이동
+  - 10슬롯 모두 완료 시 세션 status = 'completed'
+
+※ LLM 미사용 — 원본 프로토타입의 "API 키 없이도 즉시 동작" 원칙을
+그대로 유지. 정규식 휴리스틱만으로 동작하며, 추후 LLM_JUDGE 방식의
+정밀 판정을 추가할 수 있도록 detectAbstraction()이 독립 함수로 분리됨.
+
+3. DB 스키마 추가
+------------------
+story_mining_sessions
+  id, user_id, slot_index(0~9), slot_state(JSONB: modules_filled/
+  raw_answers/followup_count), status(in_progress|completed),
+  created_at, updated_at
+
+story_cards
+  id, user_id, slot_id(S01~S10), slot_name, raw_answers(JSONB),
+  modules_filled(JSONB), status(slot_complete|slot_incomplete),
+  created_at
+
+※ MVP 범위: raw_answers는 대화 전체를 배열로 저장 (모듈별로 텍스트를
+쪼개 저장하는 것은 Phase 2 — LLM 추출 패스 필요, 아래 5장 참고)
+
+4. API
+-------
+POST /api/story-bank
+  body {} → 새 세션 시작 (S01 오프닝 질문 반환)
+  body { sessionId, answer } → 한 턴 진행 (다음 질문 또는 슬롯 완료
+  카드 + 다음 슬롯 오프닝 반환)
+GET  /api/story-bank
+  → 로그인한 유저의 스토리카드 전체 목록
+
+Vercel Hobby 12-function 제한 유지를 위해 미사용 상태였던
+api/alerts/index.ts(구 F2 잔재, 프론트에서 호출되지 않음)를 제거하고
+그 자리에 배치.
+
+5. Phase 2 이후 (미구현, 설계만 확정)
+--------------------------------------
+- 모듈별 텍스트 추출: 현재는 모듈 존재 유무만 판정. 답변 텍스트에서
+  situation/friction/action/result/reflection 각각을 실제로 잘라내는
+  건 별도 LLM 패스 필요 (OpenAI gpt-4.1-mini 후보)
+- keyword_axis 클러스터링 + Cross-Story Consistency Report
+  (10개 스토리 완료 후 정체성 축 요약)
+- pgvector 기반 RAG 검색: story_cards를 임베딩해 F4 질문 생성 시
+  관련 스토리를 검색해 힌트로 제공 (ChromaDB 대신 Neon의 pgvector
+  확장 사용 — 별도 인프라 추가 없이 구현 가능)
+- F6. 자소서 도우미: 질문 유형별 모듈 재조합 규칙(원본 설계 STAGE 3)
+  적용해 초안 생성
+- 면접관 페르소나 3종 → 5종 확장 (커리어패스형/신입친화형 추가,
+  기존 v5.0에서 보류된 항목)
+
+6. 실행/검증 기록
+-------------------
+- npx tsc --noEmit: 통과
+- npm run build: 통과 (dist 생성 확인)
+- vercel dev + Node fetch로 실제 Neon DB against 전체 플로우 검증:
+  S01 4턴 진행 → 모듈 6개 순차 충족 → slot_complete → story_cards
+  insert → 세션 slot_index 1(S02)로 정상 이동 확인
+- 프론트 라우팅: 비로그인 상태에서 /story-bank 접근 시 /login으로
+  정상 리다이렉트 확인 (PrivateRoute)
