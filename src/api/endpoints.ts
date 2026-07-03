@@ -170,6 +170,14 @@ export function editStoryCard(cardId: string, rawAnswers: string[]) {
   });
 }
 
+// 미채굴 슬롯에 직접 기입해 카드 생성 (채굴 순서와 무관)
+export function createStoryCardDirect(slotId: string, rawAnswers: string[]) {
+  return apiFetch<{ ok: boolean; card: StoryCardRow }>("/story-bank?mode=edit", {
+    method: "POST",
+    body: JSON.stringify({ slotId, rawAnswers })
+  });
+}
+
 export interface UpgradeStoryCardResponse {
   upgradedAnswers: string[];
 }

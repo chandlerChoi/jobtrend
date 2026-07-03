@@ -9,6 +9,7 @@ import {
   slotIdAt,
   openingFor,
   nameFor,
+  inferFilledModules,
   TOTAL_SLOTS
 } from "../../server/storyMining.js";
 import { generateVersionContent, upgradeStoryAnswers } from "../../server/claude.js";
@@ -82,15 +83,40 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
     return;
   }
 
-  // ── POST ?mode=edit — 스토리 카드 raw_answers 수정 ───────────────────────
+  // ── POST ?mode=edit — 스토리 카드 수정 또는 신규 생성 (순서 무관 직접 기입) ─
   if (req.query.mode === "edit") {
-    const { cardId, rawAnswers } = (req.body ?? {}) as { cardId?: string; rawAnswers?: string[] };
-    if (!cardId || !Array.isArray(rawAnswers)) {
-      res.status(400).json({ error: "cardId and rawAnswers required" });
+    const { cardId, slotId, rawAnswers } = (req.body ?? {}) as {
+      cardId?: string;
+      slotId?: string;
+      rawAnswers?: string[];
+    };
+    if (!Array.isArray(rawAnswers)) {
+      res.status(400).json({ error: "rawAnswers required" });
       return;
     }
-    await db.updateStoryCard(cardId, user.id, rawAnswers);
-    res.status(200).json({ ok: true });
+    if (cardId) {
+      await db.updateStoryCard(cardId, user.id, rawAnswers);
+      res.status(200).json({ ok: true });
+      return;
+    }
+    // cardId 없이 slotId만 → 미채굴 슬롯 직접 기입으로 카드 생성
+    if (!slotId || !/^S(0[1-9]|10)$/.test(slotId)) {
+      res.status(400).json({ error: "cardId or valid slotId required" });
+      return;
+    }
+    const validSlotId = slotId as Parameters<typeof nameFor>[0];
+    const combined = rawAnswers.filter(Boolean).join(" ");
+    const modulesFilled = inferFilledModules(combined);
+    const allFilled = Object.values(modulesFilled).every(Boolean);
+    const card = await db.createStoryCard({
+      user_id: user.id,
+      slot_id: validSlotId,
+      slot_name: nameFor(validSlotId),
+      raw_answers: rawAnswers,
+      modules_filled: modulesFilled,
+      status: allFilled ? "slot_complete" : "slot_incomplete"
+    });
+    res.status(201).json({ ok: true, card });
     return;
   }
 

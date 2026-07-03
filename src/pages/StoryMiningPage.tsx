@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import ChatBubble from "../components/feature/ChatBubble";
 import {
-  startStoryMining, continueStoryMining, skipStoryMining, editStoryCard, upgradeStoryCard,
+  startStoryMining, continueStoryMining, skipStoryMining, editStoryCard, createStoryCardDirect, upgradeStoryCard,
   getActiveStoryMiningSession, listStoryCards,
   listStoryBankVersions, createStoryBankVersion, updateStoryBankVersion, deleteStoryBankVersion,
   analyzeCoverLetter, listBookmarks
@@ -263,24 +263,35 @@ function MiningTab() {
     }
   }
 
-  // 편집 모드
-  function openEdit(card: StoryCardRow) {
+  // 편집 모드 — 채굴된 카드(card)든 미채굴 슬롯(slotId만)이든 열 수 있다
+  function openEdit(slotId: SlotId, card: StoryCardRow | null) {
+    setSelectedSlot(slotId);
     setEditCard(card);
-    const questions = SLOT_QUESTIONS[card.slot_id as SlotId] ?? [];
-    // 기존 답변을 질문 개수만큼 패딩, 초과분은 마지막에 추가
-    const padded = questions.map((_, i) => card.raw_answers[i] ?? "");
-    const extras = card.raw_answers.slice(questions.length);
-    setEditAnswers([...padded, ...extras]);
+    const questions = SLOT_QUESTIONS[slotId] ?? [];
+    if (card) {
+      // 기존 답변을 질문 개수만큼 패딩, 초과분은 마지막에 추가
+      const padded = questions.map((_, i) => card.raw_answers[i] ?? "");
+      const extras = card.raw_answers.slice(questions.length);
+      setEditAnswers([...padded, ...extras]);
+    } else {
+      setEditAnswers(questions.map(() => ""));
+    }
     setView("edit");
     setUpgradeDialog(null);
   }
 
   async function handleSaveEdit() {
-    if (!editCard) return;
+    if (!selectedSlot) return;
     setSaving(true);
     try {
-      await editStoryCard(editCard.id, editAnswers);
-      setCards((prev) => prev.map((c) => c.id === editCard.id ? { ...c, raw_answers: editAnswers } : c));
+      if (editCard) {
+        await editStoryCard(editCard.id, editAnswers);
+        setCards((prev) => prev.map((c) => c.id === editCard.id ? { ...c, raw_answers: editAnswers } : c));
+      } else {
+        // 미채굴 슬롯 직접 기입 → 카드 신규 생성
+        const res = await createStoryCardDirect(selectedSlot, editAnswers);
+        setCards((prev) => [...prev.filter((c) => c.slot_id !== selectedSlot), res.card]);
+      }
       setView("overview");
     } finally {
       setSaving(false);
@@ -288,8 +299,8 @@ function MiningTab() {
   }
 
   async function handleUpgrade() {
-    if (!editCard || !upgradeDialog) return;
-    const questions = SLOT_QUESTIONS[editCard.slot_id as SlotId] ?? [];
+    if (!selectedSlot || !upgradeDialog) return;
+    const questions = SLOT_QUESTIONS[selectedSlot] ?? [];
     setUpgrading(true);
     if (upgradeDialog.type === "single" && upgradeDialog.targetIndex !== undefined) {
       setUpgradingIndex(upgradeDialog.targetIndex);
@@ -297,7 +308,7 @@ function MiningTab() {
     setUpgradeDialog(null);
     try {
       const res = await upgradeStoryCard({
-        slotName: editCard.slot_name,
+        slotName: editCard?.slot_name ?? SLOT_NAMES[selectedSlot],
         questions,
         answers: editAnswers,
         ...(upgradeDialog.type === "single" ? { targetIndex: upgradeDialog.targetIndex } : {})
@@ -357,13 +368,13 @@ function MiningTab() {
 
               return (
                 <div key={slotId}
-                  onClick={() => { if (filled) { setSelectedSlot(slotId); openEdit(card); } }}
-                  className={`rounded-xl border-2 p-3 transition-all ${
+                  onClick={() => openEdit(slotId, card ?? null)}
+                  className={`rounded-xl border-2 p-3 transition-all cursor-pointer ${
                     filled
                       ? complete
-                        ? "border-brand-300 bg-brand-50 cursor-pointer hover:border-brand-500"
-                        : "border-amber-200 bg-amber-50 cursor-pointer hover:border-amber-400"
-                      : "border-dashed border-gray-200 bg-white"
+                        ? "border-brand-300 bg-brand-50 hover:border-brand-500"
+                        : "border-amber-200 bg-amber-50 hover:border-amber-400"
+                      : "border-dashed border-gray-200 bg-white hover:border-brand-300"
                   }`}
                 >
                   <div className="flex items-start justify-between">
@@ -380,7 +391,7 @@ function MiningTab() {
                   {filled ? (
                     <ModuleDots modules={card.modules_filled} />
                   ) : (
-                    <p className="text-[10px] text-gray-400 mt-1.5">미채굴</p>
+                    <p className="text-[10px] text-gray-400 mt-1.5">미채굴 · 클릭해서 바로 작성</p>
                   )}
                   {filled && (
                     <p className="mt-1.5 text-[11px] text-gray-500 line-clamp-2 leading-snug">
@@ -404,8 +415,8 @@ function MiningTab() {
   }
 
   // ── 편집 화면 ────────────────────────────────────────────────────────────
-  if (view === "edit" && editCard) {
-    const slotQs = SLOT_QUESTIONS[editCard.slot_id as SlotId] ?? [];
+  if (view === "edit" && selectedSlot) {
+    const slotQs = SLOT_QUESTIONS[selectedSlot] ?? [];
     const totalItems = Math.max(slotQs.length, editAnswers.length);
 
     return (
@@ -442,26 +453,32 @@ function MiningTab() {
         <div className="flex items-center gap-3">
           <button onClick={() => setView("overview")}
             className="text-xs text-gray-400 hover:text-gray-600">← 목록</button>
-          <h3 className="text-sm font-bold text-gray-900">{editCard.slot_name} 편집</h3>
+          <h3 className="text-sm font-bold text-gray-900">
+            {editCard?.slot_name ?? SLOT_NAMES[selectedSlot]} 편집
+          </h3>
           <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            editCard.status === "slot_complete" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700"
+            editCard
+              ? editCard.status === "slot_complete" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700"
+              : "bg-gray-100 text-gray-500"
           }`}>
-            {editCard.status === "slot_complete" ? "완성" : "부분 채굴"}
+            {editCard ? (editCard.status === "slot_complete" ? "완성" : "부분 채굴") : "새로 작성"}
           </span>
         </div>
 
-        {/* 모듈 채움 현황 */}
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(MODULE_LABELS).map(([key, label]) => (
-            <span key={key} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-              editCard.modules_filled[key as keyof typeof editCard.modules_filled]
-                ? "bg-brand-100 text-brand-700"
-                : "bg-gray-100 text-gray-400"
-            }`}>
-              {editCard.modules_filled[key as keyof typeof editCard.modules_filled] ? "✓" : "○"} {label}
-            </span>
-          ))}
-        </div>
+        {/* 모듈 채움 현황 (기존 카드일 때만) */}
+        {editCard && (
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(MODULE_LABELS).map(([key, label]) => (
+              <span key={key} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                editCard.modules_filled[key as keyof typeof editCard.modules_filled]
+                  ? "bg-brand-100 text-brand-700"
+                  : "bg-gray-100 text-gray-400"
+              }`}>
+                {editCard.modules_filled[key as keyof typeof editCard.modules_filled] ? "✓" : "○"} {label}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* 질문+답변 카드 목록 */}
         <div className="space-y-3">
