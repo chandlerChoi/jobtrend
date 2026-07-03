@@ -195,17 +195,25 @@ export async function analyzeCoverLetter(
     principles ? `\n[참고 코칭 원칙]\n${principles}` : ""
   ].filter(Boolean).join("\n");
 
+  // 초기 분석: ~2000 tokens, 개선본 포함 시: ~3500 tokens
+  const maxTokens = followUpAnswers ? 3500 : 2000;
+
   try {
     const raw = await callOpenAI(
       "자기소개서 전문 코치입니다. 지시에 따라 JSON만 출력하세요.",
       prompt,
-      "gpt-4.1-mini"
+      "gpt-4.1-mini",
+      maxTokens
     );
-    const match = raw.match(/\{[\s\S]*\}/);
-    return JSON.parse(match ? match[0] : raw);
-  } catch {
+    // 마크다운 코드블록 제거 후 JSON 파싱
+    const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+    const match = stripped.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("no JSON in response");
+    return JSON.parse(match[0]);
+  } catch (err) {
+    console.error("analyzeCoverLetter parse error:", err);
     return {
-      sections: [{ key: "full", title: "전체", original: coverLetterText.slice(0, 200), score: 50, issues: ["분석 중 오류가 발생했습니다"], principles: [], improved: "" }],
+      sections: [{ key: "full", title: "전체", original: coverLetterText.slice(0, 200), score: 50, issues: ["분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."], principles: [], improved: "" }],
       followUpQuestions: [{ key: "q1", question: "이 경험에서 본인의 역할은 구체적으로 무엇이었나요?" }],
       overallScore: 50
     };
