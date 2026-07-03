@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 function mapAuthError(message: string): string {
@@ -15,11 +15,45 @@ function isWebView(): boolean {
   return webviewPatterns.test(ua) || isAndroidWebView || isIOSWebView;
 }
 
+// 인앱 브라우저에서 시스템 브라우저(Chrome/Safari)로 자동 탈출.
+// 앱마다 지원하는 스킴이 달라 UA별로 분기한다.
+function escapeToExternalBrowser(): boolean {
+  const ua = navigator.userAgent;
+  const url = window.location.href;
+
+  if (/KAKAOTALK/i.test(ua)) {
+    // 카카오톡 공식 외부 브라우저 열기 스킴
+    window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`;
+    return true;
+  }
+  if (/Line\//i.test(ua)) {
+    // 라인은 쿼리 파라미터로 외부 브라우저 강제
+    window.location.href = url + (url.includes("?") ? "&" : "?") + "openExternalBrowser=1";
+    return true;
+  }
+  if (/Android/i.test(ua)) {
+    // 안드로이드 인앱(인스타·페북·네이버 등): Chrome intent로 탈출
+    const stripped = url.replace(/^https?:\/\//, "");
+    window.location.href = `intent://${stripped}#Intent;scheme=https;package=com.android.chrome;end`;
+    return true;
+  }
+  if (/iPhone|iPad/i.test(ua)) {
+    // iOS 인앱: Safari 강제 호출 스킴 (iOS 17+, 미지원 시 무시됨)
+    window.location.href = `x-safari-https://${url.replace(/^https?:\/\//, "")}`;
+    return true;
+  }
+  return false;
+}
+
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<"google" | "kakao" | null>(null);
   const { googleLogin, kakaoLogin } = useAuth();
-  const inWebView = isWebView();
+
+  // 인앱 브라우저 진입 시 즉시 시스템 브라우저로 자동 이동
+  useEffect(() => {
+    if (isWebView()) escapeToExternalBrowser();
+  }, []);
 
   async function handleGoogle() {
     setSubmitting("google");
@@ -50,22 +84,6 @@ export default function LoginPage() {
         <p className="mt-2 text-center text-sm text-gray-500">
           구직 준비의 모든 것을 한 곳에서
         </p>
-
-        {inWebView && (
-          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <p className="font-semibold mb-1">⚠️ 인앱 브라우저에서는 구글 로그인이 제한됩니다</p>
-            <p className="text-xs leading-relaxed text-amber-700">
-              카카오톡·인스타그램 등 앱 내 브라우저에서 Google 로그인 시 차단될 수 있어요.<br />
-              <strong>Chrome 또는 Safari에서 직접 열어주세요.</strong>
-            </p>
-            <button
-              onClick={() => window.open(window.location.href, "_blank")}
-              className="mt-2 w-full rounded-lg bg-amber-500 py-2 text-xs font-semibold text-white hover:bg-amber-600"
-            >
-              Chrome/Safari에서 열기
-            </button>
-          </div>
-        )}
 
         <div className="mt-8 flex flex-col gap-3">
           {/* 카카오 로그인 */}
