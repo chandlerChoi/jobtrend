@@ -5,10 +5,21 @@ function mapAuthError(message: string): string {
   return `로그인에 실패했어요. (${message})`;
 }
 
+function isWebView(): boolean {
+  const ua = navigator.userAgent;
+  // Android WebView: contains 'wv' flag or KakaoTalk/Line/Instagram/Facebook
+  const webviewPatterns = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|MicroMessenger|wv\)|WebView/i;
+  // Android WebView 추가 감지: Chrome이 없는 AppleWebKit (iOS webview)
+  const isAndroidWebView = /Android/.test(ua) && /wv/.test(ua);
+  const isIOSWebView = /iPhone|iPad/.test(ua) && !/Safari/.test(ua) && /AppleWebKit/.test(ua);
+  return webviewPatterns.test(ua) || isAndroidWebView || isIOSWebView;
+}
+
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<"google" | "kakao" | null>(null);
   const { googleLogin, kakaoLogin } = useAuth();
+  const inWebView = isWebView();
 
   async function handleGoogle() {
     setSubmitting("google");
@@ -39,6 +50,22 @@ export default function LoginPage() {
         <p className="mt-2 text-center text-sm text-gray-500">
           구직 준비의 모든 것을 한 곳에서
         </p>
+
+        {inWebView && (
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p className="font-semibold mb-1">⚠️ 인앱 브라우저에서는 구글 로그인이 제한됩니다</p>
+            <p className="text-xs leading-relaxed text-amber-700">
+              카카오톡·인스타그램 등 앱 내 브라우저에서 Google 로그인 시 차단될 수 있어요.<br />
+              <strong>Chrome 또는 Safari에서 직접 열어주세요.</strong>
+            </p>
+            <button
+              onClick={() => window.open(window.location.href, "_blank")}
+              className="mt-2 w-full rounded-lg bg-amber-500 py-2 text-xs font-semibold text-white hover:bg-amber-600"
+            >
+              Chrome/Safari에서 열기
+            </button>
+          </div>
+        )}
 
         <div className="mt-8 flex flex-col gap-3">
           {/* 카카오 로그인 */}
