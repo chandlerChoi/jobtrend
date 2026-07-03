@@ -170,6 +170,22 @@ export function editStoryCard(cardId: string, rawAnswers: string[]) {
   });
 }
 
+export interface UpgradeStoryCardResponse {
+  upgradedAnswers: string[];
+}
+
+export function upgradeStoryCard(payload: {
+  slotName: string;
+  questions: string[];
+  answers: string[];
+  targetIndex?: number;
+}) {
+  return apiFetch<UpgradeStoryCardResponse>("/story-bank?mode=upgrade", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function listStoryCards() {
   return apiFetch<{ cards: StoryCardRow[] }>("/story-bank");
 }

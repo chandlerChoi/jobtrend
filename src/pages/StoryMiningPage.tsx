@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import ChatBubble from "../components/feature/ChatBubble";
 import {
-  startStoryMining, continueStoryMining, skipStoryMining, editStoryCard,
+  startStoryMining, continueStoryMining, skipStoryMining, editStoryCard, upgradeStoryCard,
   getActiveStoryMiningSession, listStoryCards,
   listStoryBankVersions, createStoryBankVersion, updateStoryBankVersion, deleteStoryBankVersion,
   analyzeCoverLetter, listBookmarks
@@ -36,6 +36,90 @@ const JOB_CATEGORIES = ["전체", "마케팅", "인사/HR", "IT/개발", "영업
 
 const OPENING = "지금부터 당신의 경험에서 10개의 '진짜 이야기'를 꺼낼 거예요. 완성된 문장으로 말하지 않아도 괜찮습니다.";
 
+// 슬롯별 사전 정의 질문 목록 (opening + followup 순서)
+const SLOT_QUESTIONS: Record<SlotId, string[]> = {
+  S01: [
+    "지금 하고 계신 일이나 관심 분야를 처음 시작하게 된 계기, 그 순간이 언제였나요?",
+    "그게 언제, 어떤 상황에서였나요? 그때 뭘 하고 계셨어요?",
+    "그 전까지는 뭘 하려고 했었나요? 방향을 바꾼 이유가 된 구체적인 사건이 있었나요?",
+    "그렇게 마음먹은 뒤 처음으로 실제로 한 행동은 뭐였어요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "그 경험이 지금 당신이 일하는 방식에 남긴 원칙이 하나 있다면요?"
+  ],
+  S02: [
+    "일하면서(또는 프로젝트하면서) 가장 크게 좌절했던 순간, 혹은 '내가 틀렸다'고 인정해야 했던 순간이 있었나요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "그때 본인이 놓쳤던 부분, 혹은 다르게 판단했으면 좋았을 부분이 있었을까요?",
+    "그 상황에서 상황을 바꾸기 위해 처음 시도한 게 뭐였어요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "그 이후 관계나 태도, 신뢰 측면에서 달라진 점이 있나요?"
+  ],
+  S03: [
+    "팀원이나 상사, 파트너와 의견이 부딪혔던 순간이 있었나요? 어떻게 풀었나요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "구체적으로 무엇에 대해 서로 다른 입장이었나요? 그 사람 입장에서는 왜 그렇게 생각했을까요?",
+    "그 이견을 좁히기 위해 실제로 어떤 대화나 행동을 하셨나요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "결국 어떻게 정리됐고, 그 사람과의 관계는 그 후 어땠나요?"
+  ],
+  S04: [
+    "누가 시키지 않았는데 스스로 만들어낸 결과물이나 변화가 있었나요?",
+    "그걸 시작하기 전, 어떤 문제나 불편함을 먼저 발견하셨나요?",
+    "그게 구체적으로 어떤 문제나 장애물이었나요?",
+    "그 상황에서 실제로 어떤 행동을 하셨는지 말씀해주시겠어요?",
+    "그 결과로 무엇이 몇 % 나아졌다거나, 시간이 얼마나 줄었다거나 하는 게 있었나요?",
+    "그 경험에서 얻은 원칙이나 기준이 있다면 한 문장으로 말씀해주시겠어요?"
+  ],
+  S05: [
+    "시간이나 자원이 절대적으로 부족한 상황에서 뭔가를 해내야 했던 순간이 있었나요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "그때 구체적으로 무엇이 어려웠거나 걸림돌이었나요?",
+    "그 안에서 무엇을 포기하고 무엇을 먼저 했는지, 그 선택의 기준이 뭐였나요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "그 경험 이후로 마감이 급할 때 지금은 어떻게 다르게 접근하세요?"
+  ],
+  S06: [
+    "숫자로 증명할 수 있는, 본인이 가장 자신 있는 성과 하나만 말씀해주세요.",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "그때 구체적으로 무엇이 어려웠거나 걸림돌이었나요?",
+    "그 숫자를 만들기 위해 구체적으로 어떤 걸 바꾸셨나요?",
+    "그게 이전과 비교해서 대략 몇 배, 몇 %, 얼마의 기간이었나요?",
+    "그 이후 관계나 태도, 신뢰 측면에서 달라진 점이 있나요?"
+  ],
+  S07: [
+    "완전히 모르는 걸 짧은 시간 안에 배워서 써먹어야 했던 순간이 있었나요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "그때 구체적으로 무엇이 어려웠거나 걸림돌이었나요?",
+    "구체적으로 어떤 자료/방법으로 배우셨어요? 막혔던 지점은 어떻게 뚫으셨나요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "그걸 배운 이후로 그 지식을 다른 상황에도 써본 적이 있나요?"
+  ],
+  S08: [
+    "직급이나 역할과 관계없이, 다른 사람을 움직이게 하거나 설득해야 했던 순간이 있었나요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "왜 다들 꺼려했을까요? 그 사람들 입장에서의 이유가 뭐였을까요?",
+    "그 사람들을 움직이기 위해 논리로 설득했나요, 먼저 행동으로 보여줬나요, 아니면 다른 방법이었나요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "그 경험에서 얻은 원칙이나 기준이 있다면 한 문장으로 말씀해주시겠어요?"
+  ],
+  S09: [
+    "효율이나 결과를 위해 원칙을 조금 굽힐 수 있었던 상황에서, 오히려 원칙을 지켰던(또는 지키지 못했던) 순간이 있었나요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "그 순간 조금이라도 흔들렸던 지점이 있었을 것 같은데, 뭐였나요?",
+    "그 상황에서 실제로 어떤 행동을 하셨는지 말씀해주시겠어요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "그 경험에서 얻은 원칙이나 기준이 있다면 한 문장으로 말씀해주시겠어요?"
+  ],
+  S10: [
+    "지금까지의 이야기들이 지원하려는 직무/회사와 어떻게 이어진다고 생각하세요?",
+    "그게 언제, 어떤 상황에서였는지 조금 더 구체적으로 말씀해주시겠어요?",
+    "그때 구체적으로 무엇이 어려웠거나 걸림돌이었나요?",
+    "그 상황에서 실제로 어떤 행동을 하셨는지 말씀해주시겠어요?",
+    "그 결과를 숫자나 눈에 보이는 변화로 표현하면 어떻게 되나요?",
+    "지금까지 나온 이야기들의 공통점이 이 회사/직무에서는 구체적으로 어떤 상황에 쓰일 것 같나요?"
+  ]
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 슬롯 완성도 미니 뷰
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,6 +138,11 @@ function ModuleDots({ modules }: { modules: Record<string, boolean> }) {
 // 탭 1 — 스토리 채굴 (Overview → Slot Detail → Mining Session)
 // ─────────────────────────────────────────────────────────────────────────────
 type MiningView = "overview" | "session" | "edit";
+
+interface UpgradeDialog {
+  type: "single" | "all";
+  targetIndex?: number;
+}
 
 function MiningTab() {
   // 공통
@@ -79,6 +168,11 @@ function MiningTab() {
   const [editCard, setEditCard] = useState<StoryCardRow | null>(null);
   const [editAnswers, setEditAnswers] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // AI 업그레이드 상태
+  const [upgradeDialog, setUpgradeDialog] = useState<UpgradeDialog | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradingIndex, setUpgradingIndex] = useState<number | null>(null);
 
   // 카드 로드
   const loadCards = useCallback(async () => {
@@ -172,8 +266,13 @@ function MiningTab() {
   // 편집 모드
   function openEdit(card: StoryCardRow) {
     setEditCard(card);
-    setEditAnswers([...card.raw_answers]);
+    const questions = SLOT_QUESTIONS[card.slot_id as SlotId] ?? [];
+    // 기존 답변을 질문 개수만큼 패딩, 초과분은 마지막에 추가
+    const padded = questions.map((_, i) => card.raw_answers[i] ?? "");
+    const extras = card.raw_answers.slice(questions.length);
+    setEditAnswers([...padded, ...extras]);
     setView("edit");
+    setUpgradeDialog(null);
   }
 
   async function handleSaveEdit() {
@@ -185,6 +284,28 @@ function MiningTab() {
       setView("overview");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleUpgrade() {
+    if (!editCard || !upgradeDialog) return;
+    const questions = SLOT_QUESTIONS[editCard.slot_id as SlotId] ?? [];
+    setUpgrading(true);
+    if (upgradeDialog.type === "single" && upgradeDialog.targetIndex !== undefined) {
+      setUpgradingIndex(upgradeDialog.targetIndex);
+    }
+    setUpgradeDialog(null);
+    try {
+      const res = await upgradeStoryCard({
+        slotName: editCard.slot_name,
+        questions,
+        answers: editAnswers,
+        ...(upgradeDialog.type === "single" ? { targetIndex: upgradeDialog.targetIndex } : {})
+      });
+      setEditAnswers(res.upgradedAnswers);
+    } finally {
+      setUpgrading(false);
+      setUpgradingIndex(null);
     }
   }
 
@@ -284,9 +405,40 @@ function MiningTab() {
 
   // ── 편집 화면 ────────────────────────────────────────────────────────────
   if (view === "edit" && editCard) {
-    const moduleKeys = Object.keys(MODULE_LABELS);
+    const slotQs = SLOT_QUESTIONS[editCard.slot_id as SlotId] ?? [];
+    const totalItems = Math.max(slotQs.length, editAnswers.length);
+
     return (
       <div className="space-y-4">
+        {/* 확인 다이얼로그 */}
+        {upgradeDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3">
+              <p className="text-sm font-bold text-gray-900">
+                {upgradeDialog.type === "all" ? "✨ 전체 AI 업그레이드" : "✨ 항목별 AI 업그레이드"}
+              </p>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                RAG 코칭 원칙을 바탕으로 답변을 자동 개선합니다.<br />
+                <span className="text-amber-600 font-medium">⚠️ AI 환각(hallucination)이 발생할 수 있습니다.</span><br />
+                실제 경험과 다른 내용이 생성될 수 있으니 반드시 검토 후 저장하세요.
+              </p>
+              <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                예상 토큰: {upgradeDialog.type === "all" ? "3,000–4,000 tokens (gpt-4.1-mini)" : "1,000–1,500 tokens (gpt-4.1-mini)"}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setUpgradeDialog(null)}
+                  className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-500 hover:bg-gray-50">
+                  진행 안함
+                </button>
+                <button onClick={handleUpgrade}
+                  className="flex-1 rounded-xl bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600">
+                  진행
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <button onClick={() => setView("overview")}
             className="text-xs text-gray-400 hover:text-gray-600">← 목록</button>
@@ -300,50 +452,80 @@ function MiningTab() {
 
         {/* 모듈 채움 현황 */}
         <div className="flex flex-wrap gap-1.5">
-          {moduleKeys.map((key) => (
+          {Object.entries(MODULE_LABELS).map(([key, label]) => (
             <span key={key} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
               editCard.modules_filled[key as keyof typeof editCard.modules_filled]
                 ? "bg-brand-100 text-brand-700"
                 : "bg-gray-100 text-gray-400"
             }`}>
-              {editCard.modules_filled[key as keyof typeof editCard.modules_filled] ? "✓" : "○"} {MODULE_LABELS[key]}
+              {editCard.modules_filled[key as keyof typeof editCard.modules_filled] ? "✓" : "○"} {label}
             </span>
           ))}
         </div>
 
-        {/* 답변 편집 */}
+        {/* 질문+답변 카드 목록 */}
         <div className="space-y-3">
-          {editAnswers.map((ans, i) => (
-            <div key={i}>
-              <label className="text-xs text-gray-500 mb-1 block">답변 {i + 1}</label>
-              <textarea
-                value={ans}
-                onChange={(e) => {
-                  const next = [...editAnswers];
-                  next[i] = e.target.value;
-                  setEditAnswers(next);
-                }}
-                rows={3}
-                className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-              <p className="text-right text-[10px] text-gray-300">{ans.length}자</p>
-            </div>
-          ))}
-          {/* 답변 추가 */}
-          <button
-            onClick={() => setEditAnswers((prev) => [...prev, ""])}
-            className="w-full rounded-xl border border-dashed border-gray-200 py-2 text-xs text-gray-400 hover:border-gray-300 hover:text-gray-600"
-          >
-            + 답변 추가
-          </button>
+          {Array.from({ length: totalItems }).map((_, i) => {
+            const question = slotQs[i] ?? `추가 답변 ${i - slotQs.length + 1}`;
+            const ans = editAnswers[i] ?? "";
+            const isUpgradingThis = upgrading && upgradingIndex === i;
+            const isUpgradingAll = upgrading && upgradingIndex === null;
+            return (
+              <div key={i} className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-medium text-brand-700 leading-snug flex-1">Q{i + 1}. {question}</p>
+                  <button
+                    onClick={() => setUpgradeDialog({ type: "single", targetIndex: i })}
+                    disabled={upgrading}
+                    className="shrink-0 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 transition-colors"
+                  >
+                    {isUpgradingThis ? "업그레이드 중..." : "✨ AI"}
+                  </button>
+                </div>
+                <div className="relative">
+                  {(isUpgradingThis || isUpgradingAll) && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-purple-50/80 z-10">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+                    </div>
+                  )}
+                  <textarea
+                    value={ans}
+                    onChange={(e) => {
+                      const next = [...editAnswers];
+                      while (next.length <= i) next.push("");
+                      next[i] = e.target.value;
+                      setEditAnswers(next);
+                    }}
+                    rows={3}
+                    disabled={upgrading}
+                    className="w-full rounded-lg border border-gray-200 p-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
+                    placeholder={`${question}에 대한 답변을 입력하세요.`}
+                  />
+                </div>
+                <p className="text-right text-[10px] text-gray-300">{ans.length}자</p>
+              </div>
+            );
+          })}
         </div>
+
+        {/* 하단 버튼 */}
+        <button
+          onClick={() => setUpgradeDialog({ type: "all" })}
+          disabled={upgrading}
+          className="w-full rounded-xl border border-purple-300 bg-purple-50 py-2.5 text-sm font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+        >
+          {upgrading && upgradingIndex === null
+            ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" /> 전체 업그레이드 중...</>
+            : "✨ 전체 AI 업그레이드"
+          }
+        </button>
 
         <div className="flex gap-2">
           <button onClick={() => setView("overview")}
             className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:bg-gray-50">
             취소
           </button>
-          <button onClick={handleSaveEdit} disabled={saving}
+          <button onClick={handleSaveEdit} disabled={saving || upgrading}
             className="flex-1 rounded-xl bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-40">
             {saving ? "저장 중..." : "저장하기"}
           </button>

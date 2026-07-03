@@ -57,7 +57,7 @@ export const PERSONA_LABELS: Record<string, string> = {
   career: "커리어패스",
 };
 
-async function callOpenAI(system: string, user: string, model = "gpt-4.1-mini"): Promise<string> {
+async function callOpenAI(system: string, user: string, model = "gpt-4.1-mini", maxTokens = 1024): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -66,7 +66,7 @@ async function callOpenAI(system: string, user: string, model = "gpt-4.1-mini"):
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user }
@@ -253,5 +253,76 @@ export async function generateVersionContent(
     return JSON.parse(match ? match[0] : raw);
   } catch {
     return { intro: "", motivation: "", competency: "", growth: "" };
+  }
+}
+
+// ── 스토리뱅크 답변 AI 업그레이드 ─────────────────────────────────────────
+// targetIndex: undefined = 전체 업그레이드, number = 해당 인덱스만 업그레이드
+// 예상 토큰: 전체 ~3,000–4,000 / 항목별 ~1,000–1,500 (gpt-4.1-mini 기준)
+export async function upgradeStoryAnswers(
+  slotName: string,
+  questions: string[],
+  answers: string[],
+  targetIndex?: number
+): Promise<string[]> {
+  if (!process.env.OPENAI_API_KEY) return answers;
+
+  const hits = await searchKnowledge(`STAR 자기소개서 면접 스토리 ${slotName}`, { limit: 4 });
+  const principles = principlesToPrompt(hits);
+
+  const system = [
+    "당신은 자기소개서·면접 스토리 전문 코치입니다.",
+    "STAR(상황-과제-행동-결과) 구조와 구체적 수치를 활용해 지원자 답변을 개선합니다.",
+    principles ? `\n[코칭 원칙]\n${principles}` : "",
+    "\n규칙: 지원자가 직접 쓴 경험 사실을 유지하되, 추상적 표현을 구체적으로 바꿔주세요.",
+    "지원자가 언급하지 않은 사실을 추가하거나 수치를 창작하지 마세요.",
+    "JSON 배열 형태로만 응답하세요."
+  ].filter(Boolean).join("\n");
+
+  if (targetIndex !== undefined) {
+    // 단일 항목 업그레이드
+    const q = questions[targetIndex] ?? `답변 ${targetIndex + 1}`;
+    const a = answers[targetIndex] ?? "";
+    const prompt = [
+      `[스토리 유형: ${slotName}]`,
+      `[질문] ${q}`,
+      `[기존 답변] ${a}`,
+      "",
+      "위 답변을 STAR 구조로 구체화해 개선하세요.",
+      "개선된 답변 하나만 JSON 배열로: [\"개선된 답변\"]"
+    ].join("\n");
+
+    try {
+      const raw = await callOpenAI(system, prompt, "gpt-4.1-mini", 800);
+      const match = raw.match(/\[[\s\S]*\]/);
+      const parsed = JSON.parse(match ? match[0] : `["${raw}"]`) as string[];
+      const result = [...answers];
+      result[targetIndex] = parsed[0] ?? answers[targetIndex];
+      return result;
+    } catch {
+      return answers;
+    }
+  }
+
+  // 전체 업그레이드
+  const qaList = questions.map((q, i) =>
+    `Q${i + 1}: ${q}\nA${i + 1}: ${answers[i] ?? "(미입력)"}`
+  ).join("\n\n");
+
+  const prompt = [
+    `[스토리 유형: ${slotName}]`,
+    `[질문-답변]\n${qaList}`,
+    "",
+    "각 답변을 STAR 구조로 구체화해 개선하세요.",
+    `JSON 배열로 모든 답변 반환: ${JSON.stringify(questions.map((_, i) => `개선된 답변 ${i + 1}`))}`
+  ].join("\n");
+
+  try {
+    const raw = await callOpenAI(system, prompt, "gpt-4.1-mini", 2000);
+    const match = raw.match(/\[[\s\S]*\]/);
+    const parsed = JSON.parse(match ? match[0] : "[]") as string[];
+    return questions.map((_, i) => parsed[i] ?? answers[i] ?? "");
+  } catch {
+    return answers;
   }
 }

@@ -11,7 +11,7 @@ import {
   nameFor,
   TOTAL_SLOTS
 } from "../../server/storyMining.js";
-import { generateVersionContent } from "../../server/claude.js";
+import { generateVersionContent, upgradeStoryAnswers } from "../../server/claude.js";
 
 // POST /api/story-bank — 채굴 세션 시작/이어가기
 //   body {} → 새 세션 시작
@@ -57,6 +57,28 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "method_not_allowed" });
+    return;
+  }
+
+  // ── POST ?mode=upgrade — 스토리 답변 AI 업그레이드 ──────────────────────
+  if (req.query.mode === "upgrade") {
+    const { slotName, questions, answers, targetIndex } = (req.body ?? {}) as {
+      slotName?: string;
+      questions?: string[];
+      answers?: string[];
+      targetIndex?: number;
+    };
+    if (!slotName || !Array.isArray(questions) || !Array.isArray(answers)) {
+      res.status(400).json({ error: "slotName, questions, answers required" });
+      return;
+    }
+    const upgradedAnswers = await upgradeStoryAnswers(
+      slotName,
+      questions,
+      answers,
+      typeof targetIndex === "number" ? targetIndex : undefined
+    );
+    res.status(200).json({ upgradedAnswers });
     return;
   }
 
