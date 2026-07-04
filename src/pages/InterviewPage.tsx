@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { startInterview, listBookmarks, listInterviewSessions } from "../api/endpoints";
+import { startInterview, listBookmarks, listInterviewSessions, listStoryCards, listStoryBankVersions } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import { useCredits } from "../context/CreditContext";
-import type { RecruitmentNewsRow } from "../../shared/types";
+import type { RecruitmentNewsRow, StoryCardRow, StoryBankVersion } from "../../shared/types";
 import type { InterviewSessionSummary } from "../api/endpoints";
 
 const SIDEBAR_KEY = "jobtrend_interview_sidebar";
@@ -41,6 +41,24 @@ const PERSONA_EMOJIS: Record<string, string> = {
 };
 
 type HintMode = "none" | "keywords";
+type ResumeSource = "storybank" | "manual" | string; // string = 버전 id
+
+const SECTION_ORDER = ["intro", "motivation", "competency", "growth"] as const;
+
+// 스토리 카드들을 이력서 대용 텍스트로 요약
+function storyCardsToResume(cards: StoryCardRow[]): string {
+  return cards
+    .map((c) => `[${c.slot_name}]\n${c.raw_answers.filter(Boolean).join(" ")}`)
+    .join("\n\n");
+}
+
+// 공고별 버전의 자소서 섹션을 이력서 텍스트로 변환
+function versionToResume(v: StoryBankVersion): string {
+  return SECTION_ORDER
+    .map((key) => v.story_content[key])
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 function PersonaChip({ persona, session }: { persona: string; session: InterviewSessionSummary }) {
   const labels = persona.split("|").map((p) => `${PERSONA_EMOJIS[p] ?? ""}${PERSONA_LABELS[p] ?? p}`).join(" + ");
@@ -74,10 +92,39 @@ export default function InterviewPage() {
   const [pastSessions, setPastSessions] = useState<InterviewSessionSummary[]>([]);
   const sessionsRef = useRef<HTMLDivElement>(null);
 
+  // 이력서 자동 로드 소스: 스토리뱅크 / 공고별 버전 / 직접 입력
+  const [storyCards, setStoryCards] = useState<StoryCardRow[]>([]);
+  const [versions, setVersions] = useState<StoryBankVersion[]>([]);
+  const [resumeSource, setResumeSource] = useState<ResumeSource>("manual");
+
   useEffect(() => {
     listBookmarks().then((r) => setBookmarks(r.news)).catch(() => {});
     listInterviewSessions().then((r) => setPastSessions(r.sessions)).catch(() => {});
+    listStoryBankVersions().then((r) => setVersions(r.versions)).catch(() => {});
+    listStoryCards().then((r) => {
+      setStoryCards(r.cards);
+      // 스토리뱅크가 있으면 자동으로 이력서 채움 (사용자가 이미 입력했으면 유지)
+      if (r.cards.length > 0) {
+        setResume((prev) => {
+          if (prev.trim()) return prev;
+          setResumeSource("storybank");
+          return storyCardsToResume(r.cards);
+        });
+      }
+    }).catch(() => {});
   }, []);
+
+  function selectResumeSource(source: ResumeSource) {
+    setResumeSource(source);
+    if (source === "storybank") {
+      setResume(storyCardsToResume(storyCards));
+    } else if (source === "manual") {
+      setResume("");
+    } else {
+      const v = versions.find((v) => v.id === source);
+      if (v) setResume(versionToResume(v));
+    }
+  }
 
   function toggleSidebar() {
     setShowSidebar((prev) => {
@@ -241,16 +288,58 @@ export default function InterviewPage() {
           )}
         </div>
 
-        {/* 이력서 */}
+        {/* 이력서 — 저장된 데이터 자동 로드 + 수동 선택 */}
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">이력서 (선택)</label>
+          {(storyCards.length > 0 || versions.length > 0) && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {storyCards.length > 0 && (
+                <button
+                  onClick={() => selectResumeSource("storybank")}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    resumeSource === "storybank"
+                      ? "bg-brand-500 text-white"
+                      : "border border-gray-200 text-gray-600 hover:border-brand-400"
+                  }`}
+                >
+                  📖 스토리뱅크 ({storyCards.length}개 스토리)
+                </button>
+              )}
+              {versions.slice(0, 4).map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => selectResumeSource(v.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    resumeSource === v.id
+                      ? "bg-purple-500 text-white"
+                      : "border border-gray-200 text-gray-600 hover:border-purple-400"
+                  }`}
+                >
+                  📄 {v.version_name}
+                </button>
+              ))}
+              <button
+                onClick={() => selectResumeSource("manual")}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  resumeSource === "manual"
+                    ? "bg-gray-700 text-white"
+                    : "border border-gray-200 text-gray-600 hover:border-gray-400"
+                }`}
+              >
+                ✏️ 직접 입력
+              </button>
+            </div>
+          )}
           <textarea
             value={resume}
-            onChange={(e) => setResume(e.target.value)}
-            rows={3}
+            onChange={(e) => { setResume(e.target.value); setResumeSource("manual"); }}
+            rows={resumeSource !== "manual" && resume ? 5 : 3}
             className="w-full rounded-lg border border-gray-200 bg-white p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             placeholder="이력서 내용을 붙여넣으면 더 맞춤화된 질문을 받을 수 있어요."
           />
+          {resumeSource === "storybank" && resume && (
+            <p className="mt-1 text-[11px] text-brand-600">✓ 스토리뱅크에서 자동으로 불러왔어요. 수정해도 원본은 바뀌지 않아요.</p>
+          )}
         </div>
 
         {error && (

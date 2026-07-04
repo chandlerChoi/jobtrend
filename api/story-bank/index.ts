@@ -73,13 +73,13 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
       res.status(400).json({ error: "slotName, questions, answers required" });
       return;
     }
-    const upgradedAnswers = await upgradeStoryAnswers(
+    const upgraded = await upgradeStoryAnswers(
       slotName,
       questions,
       answers,
       typeof targetIndex === "number" ? targetIndex : undefined
     );
-    res.status(200).json({ upgradedAnswers });
+    res.status(200).json({ upgraded });
     return;
   }
 

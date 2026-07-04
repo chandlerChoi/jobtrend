@@ -173,6 +173,8 @@ function MiningTab() {
   const [upgradeDialog, setUpgradeDialog] = useState<UpgradeDialog | null>(null);
   const [upgrading, setUpgrading] = useState(false);
   const [upgradingIndex, setUpgradingIndex] = useState<number | null>(null);
+  // 항목별 개선 제안: index → { before, after, reason } — 수락/거절 대기
+  const [pendingUpgrades, setPendingUpgrades] = useState<Record<number, { before: string; after: string; reason: string }>>({});
 
   // 카드 로드
   const loadCards = useCallback(async () => {
@@ -278,6 +280,7 @@ function MiningTab() {
     }
     setView("edit");
     setUpgradeDialog(null);
+    setPendingUpgrades({});
   }
 
   async function handleSaveEdit() {
@@ -313,11 +316,45 @@ function MiningTab() {
         answers: editAnswers,
         ...(upgradeDialog.type === "single" ? { targetIndex: upgradeDialog.targetIndex } : {})
       });
-      setEditAnswers(res.upgradedAnswers);
+      // 바로 덮어쓰지 않고, 바뀐 항목만 비포/애프터 수락 대기 상태로 쌓는다
+      setPendingUpgrades((prev) => {
+        const next = { ...prev };
+        res.upgraded.forEach((u, i) => {
+          const before = editAnswers[i] ?? "";
+          if (u.text && u.text !== before) {
+            next[i] = { before, after: u.text, reason: u.reason };
+          }
+        });
+        return next;
+      });
     } finally {
       setUpgrading(false);
       setUpgradingIndex(null);
     }
+  }
+
+  function acceptUpgrade(index: number) {
+    const pending = pendingUpgrades[index];
+    if (!pending) return;
+    setEditAnswers((prev) => {
+      const next = [...prev];
+      while (next.length <= index) next.push("");
+      next[index] = pending.after;
+      return next;
+    });
+    setPendingUpgrades((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+  }
+
+  function rejectUpgrade(index: number) {
+    setPendingUpgrades((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
   }
 
   // ── 개요 화면 ────────────────────────────────────────────────────────────
@@ -426,16 +463,13 @@ function MiningTab() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3">
               <p className="text-sm font-bold text-gray-900">
-                {upgradeDialog.type === "all" ? "✨ 전체 AI 업그레이드" : "✨ 항목별 AI 업그레이드"}
+                {upgradeDialog.type === "all" ? "✨ 전체 AI 업그레이드" : "✨ AI 업그레이드"}
               </p>
               <p className="text-xs text-gray-600 leading-relaxed">
-                RAG 코칭 원칙을 바탕으로 답변을 자동 개선합니다.<br />
+                답변을 자동 개선합니다.<br />
                 <span className="text-amber-600 font-medium">⚠️ AI 환각(hallucination)이 발생할 수 있습니다.</span><br />
-                실제 경험과 다른 내용이 생성될 수 있으니 반드시 검토 후 저장하세요.
+                개선안을 비교해 보고 직접 수락/거절할 수 있어요.
               </p>
-              <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                예상 토큰: {upgradeDialog.type === "all" ? "3,000–4,000 tokens (gpt-4.1-mini)" : "1,000–1,500 tokens (gpt-4.1-mini)"}
-              </div>
               <div className="flex gap-2">
                 <button onClick={() => setUpgradeDialog(null)}
                   className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-500 hover:bg-gray-50">
@@ -487,39 +521,75 @@ function MiningTab() {
             const ans = editAnswers[i] ?? "";
             const isUpgradingThis = upgrading && upgradingIndex === i;
             const isUpgradingAll = upgrading && upgradingIndex === null;
+            const pending = pendingUpgrades[i];
             return (
               <div key={i} className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-xs font-medium text-brand-700 leading-snug flex-1">Q{i + 1}. {question}</p>
-                  <button
-                    onClick={() => setUpgradeDialog({ type: "single", targetIndex: i })}
-                    disabled={upgrading}
-                    className="shrink-0 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 transition-colors"
-                  >
-                    {isUpgradingThis ? "업그레이드 중..." : "✨ AI"}
-                  </button>
-                </div>
-                <div className="relative">
-                  {(isUpgradingThis || isUpgradingAll) && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-purple-50/80 z-10">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-                    </div>
+                  {!pending && (
+                    <button
+                      onClick={() => setUpgradeDialog({ type: "single", targetIndex: i })}
+                      disabled={upgrading}
+                      className="shrink-0 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 transition-colors"
+                    >
+                      {isUpgradingThis ? "업그레이드 중..." : "✨ AI"}
+                    </button>
                   )}
-                  <textarea
-                    value={ans}
-                    onChange={(e) => {
-                      const next = [...editAnswers];
-                      while (next.length <= i) next.push("");
-                      next[i] = e.target.value;
-                      setEditAnswers(next);
-                    }}
-                    rows={3}
-                    disabled={upgrading}
-                    className="w-full rounded-lg border border-gray-200 p-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
-                    placeholder={`${question}에 대한 답변을 입력하세요.`}
-                  />
                 </div>
-                <p className="text-right text-[10px] text-gray-300">{ans.length}자</p>
+
+                {pending ? (
+                  /* 비포/애프터 비교 — 수락/거절 */
+                  <div className="space-y-2">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                      <p className="text-[10px] font-bold text-gray-400 mb-1">현재 답변</p>
+                      <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap">{pending.before || "(비어 있음)"}</p>
+                    </div>
+                    <div className="rounded-lg border-2 border-brand-300 bg-brand-50 p-2.5">
+                      <p className="text-[10px] font-bold text-brand-600 mb-1">✨ AI 개선안</p>
+                      <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap">{pending.after}</p>
+                    </div>
+                    {pending.reason && (
+                      <div className="rounded-lg bg-blue-50 border border-blue-100 p-2.5">
+                        <p className="text-[10px] font-bold text-blue-600 mb-1">💡 이렇게 바꾼 이유</p>
+                        <p className="text-xs text-blue-800 leading-relaxed">{pending.reason}</p>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button onClick={() => rejectUpgrade(i)}
+                        className="flex-1 rounded-lg border border-gray-200 py-1.5 text-xs text-gray-500 hover:bg-gray-50">
+                        ✗ 기존 답변 유지
+                      </button>
+                      <button onClick={() => acceptUpgrade(i)}
+                        className="flex-1 rounded-lg bg-brand-500 py-1.5 text-xs font-semibold text-white hover:bg-brand-600">
+                        ✓ 개선안 적용
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      {(isUpgradingThis || isUpgradingAll) && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-purple-50/80 z-10">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+                        </div>
+                      )}
+                      <textarea
+                        value={ans}
+                        onChange={(e) => {
+                          const next = [...editAnswers];
+                          while (next.length <= i) next.push("");
+                          next[i] = e.target.value;
+                          setEditAnswers(next);
+                        }}
+                        rows={3}
+                        disabled={upgrading}
+                        className="w-full rounded-lg border border-gray-200 p-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
+                        placeholder={`${question}에 대한 답변을 입력하세요.`}
+                      />
+                    </div>
+                    <p className="text-right text-[10px] text-gray-300">{ans.length}자</p>
+                  </>
+                )}
               </div>
             );
           })}
@@ -537,12 +607,17 @@ function MiningTab() {
           }
         </button>
 
+        {Object.keys(pendingUpgrades).length > 0 && (
+          <p className="text-xs text-amber-600 text-center">
+            ⚠️ 수락/거절을 기다리는 개선안이 {Object.keys(pendingUpgrades).length}개 있어요. 결정 후 저장하세요.
+          </p>
+        )}
         <div className="flex gap-2">
           <button onClick={() => setView("overview")}
             className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:bg-gray-50">
             취소
           </button>
-          <button onClick={handleSaveEdit} disabled={saving || upgrading}
+          <button onClick={handleSaveEdit} disabled={saving || upgrading || Object.keys(pendingUpgrades).length > 0}
             className="flex-1 rounded-xl bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-40">
             {saving ? "저장 중..." : "저장하기"}
           </button>

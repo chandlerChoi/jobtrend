@@ -266,14 +266,20 @@ export async function generateVersionContent(
 
 // ── 스토리뱅크 답변 AI 업그레이드 ─────────────────────────────────────────
 // targetIndex: undefined = 전체 업그레이드, number = 해당 인덱스만 업그레이드
-// 예상 토큰: 전체 ~3,000–4,000 / 항목별 ~1,000–1,500 (gpt-4.1-mini 기준)
+// 각 개선안에 RAG 원칙 기반 "왜 이렇게 바꿨는지" 이유를 함께 반환한다.
+export interface UpgradedAnswer {
+  text: string;
+  reason: string;
+}
+
 export async function upgradeStoryAnswers(
   slotName: string,
   questions: string[],
   answers: string[],
   targetIndex?: number
-): Promise<string[]> {
-  if (!process.env.OPENAI_API_KEY) return answers;
+): Promise<UpgradedAnswer[]> {
+  const asIs = (): UpgradedAnswer[] => answers.map((a) => ({ text: a, reason: "" }));
+  if (!process.env.OPENAI_API_KEY) return asIs();
 
   const hits = await searchKnowledge(`STAR 자기소개서 면접 스토리 ${slotName}`, { limit: 4 });
   const principles = principlesToPrompt(hits);
@@ -284,7 +290,9 @@ export async function upgradeStoryAnswers(
     principles ? `\n[코칭 원칙]\n${principles}` : "",
     "\n규칙: 지원자가 직접 쓴 경험 사실을 유지하되, 추상적 표현을 구체적으로 바꿔주세요.",
     "지원자가 언급하지 않은 사실을 추가하거나 수치를 창작하지 마세요.",
-    "JSON 배열 형태로만 응답하세요."
+    "각 개선안에는 reason(왜 이렇게 바꿨는지)을 반드시 포함하세요.",
+    "reason은 위 코칭 원칙 중 어떤 원칙을 어떻게 적용했는지 1~2문장으로 쉽게 설명하세요.",
+    "JSON으로만 응답하세요."
   ].filter(Boolean).join("\n");
 
   if (targetIndex !== undefined) {
@@ -297,18 +305,20 @@ export async function upgradeStoryAnswers(
       `[기존 답변] ${a}`,
       "",
       "위 답변을 STAR 구조로 구체화해 개선하세요.",
-      "개선된 답변 하나만 JSON 배열로: [\"개선된 답변\"]"
+      'JSON: [{"text":"개선된 답변","reason":"적용한 원칙과 바꾼 이유"}]'
     ].join("\n");
 
     try {
-      const raw = await callOpenAI(system, prompt, "gpt-4.1-mini", 800);
+      const raw = await callOpenAI(system, prompt, "gpt-4.1-mini", 1000);
       const match = raw.match(/\[[\s\S]*\]/);
-      const parsed = JSON.parse(match ? match[0] : `["${raw}"]`) as string[];
-      const result = [...answers];
-      result[targetIndex] = parsed[0] ?? answers[targetIndex];
+      const parsed = JSON.parse(match ? match[0] : "[]") as { text?: string; reason?: string }[];
+      const result = asIs();
+      if (parsed[0]?.text) {
+        result[targetIndex] = { text: parsed[0].text, reason: parsed[0].reason ?? "" };
+      }
       return result;
     } catch {
-      return answers;
+      return asIs();
     }
   }
 
@@ -321,16 +331,19 @@ export async function upgradeStoryAnswers(
     `[스토리 유형: ${slotName}]`,
     `[질문-답변]\n${qaList}`,
     "",
-    "각 답변을 STAR 구조로 구체화해 개선하세요.",
-    `JSON 배열로 모든 답변 반환: ${JSON.stringify(questions.map((_, i) => `개선된 답변 ${i + 1}`))}`
+    "각 답변을 STAR 구조로 구체화해 개선하세요. 미입력 답변은 빈 text로 두세요.",
+    'JSON 배열로 모든 답변 반환: [{"text":"개선 답변1","reason":"이유1"},{"text":"개선 답변2","reason":"이유2"}, ...]'
   ].join("\n");
 
   try {
-    const raw = await callOpenAI(system, prompt, "gpt-4.1-mini", 2000);
+    const raw = await callOpenAI(system, prompt, "gpt-4.1-mini", 2500);
     const match = raw.match(/\[[\s\S]*\]/);
-    const parsed = JSON.parse(match ? match[0] : "[]") as string[];
-    return questions.map((_, i) => parsed[i] ?? answers[i] ?? "");
+    const parsed = JSON.parse(match ? match[0] : "[]") as { text?: string; reason?: string }[];
+    return questions.map((_, i) => ({
+      text: parsed[i]?.text || answers[i] || "",
+      reason: parsed[i]?.text ? (parsed[i]?.reason ?? "") : ""
+    }));
   } catch {
-    return answers;
+    return asIs();
   }
 }

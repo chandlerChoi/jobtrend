@@ -178,8 +178,13 @@ export function createStoryCardDirect(slotId: string, rawAnswers: string[]) {
   });
 }
 
+export interface UpgradedAnswer {
+  text: string;
+  reason: string;
+}
+
 export interface UpgradeStoryCardResponse {
-  upgradedAnswers: string[];
+  upgraded: UpgradedAnswer[];
 }
 
 export function upgradeStoryCard(payload: {
