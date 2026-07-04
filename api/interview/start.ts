@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling } from "../../server/respond.js";
 import { requireUser } from "../../server/auth.js";
 import { db } from "../../server/db.js";
-import { generateInterviewQuestions } from "../../server/claude.js";
+import { generateInterviewQuestions, extractTextFromImages, generateQuestionHint } from "../../server/claude.js";
 import { findStoryHint } from "../../server/storyMining.js";
 
 export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
@@ -29,6 +29,30 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "method_not_allowed" });
+    return;
+  }
+
+  // ── POST ?mode=ocr — 채용공고 이미지에서 텍스트 추출 ─────────────────────
+  if (req.query.mode === "ocr") {
+    const { images } = (req.body ?? {}) as { images?: string[] };
+    if (!Array.isArray(images) || images.length === 0) {
+      res.status(400).json({ error: "images required" });
+      return;
+    }
+    const text = await extractTextFromImages(images.slice(0, 5));
+    res.status(200).json({ text });
+    return;
+  }
+
+  // ── POST ?mode=hint — 질문 의도·힌트 (RAG + nano) ────────────────────────
+  if (req.query.mode === "hint") {
+    const { questionText } = (req.body ?? {}) as { questionText?: string };
+    if (!questionText) {
+      res.status(400).json({ error: "questionText required" });
+      return;
+    }
+    const hint = await generateQuestionHint(questionText);
+    res.status(200).json({ hint });
     return;
   }
 

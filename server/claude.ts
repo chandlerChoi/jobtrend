@@ -264,6 +264,75 @@ export async function generateVersionContent(
   }
 }
 
+// ── 채용공고 이미지 → 텍스트 추출 (Vision OCR) ─────────────────────────────
+// images: data URL (base64) 배열, 여러 장을 한 번에 처리
+export async function extractTextFromImages(images: string[]): Promise<string> {
+  if (!process.env.OPENAI_API_KEY || images.length === 0) return "";
+
+  const content: ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[] = [
+    {
+      type: "text",
+      text: [
+        "다음은 채용공고 이미지입니다. 이미지 속 텍스트를 모두 읽어 채용공고 내용을 정리하세요.",
+        "모집분야, 업무내용, 자격요건, 우대사항, 근무지, 전형절차, 모집기간을 중심으로",
+        "원문 표현을 유지하며 텍스트로 정리하세요. 표는 항목별 줄바꿈으로 풀어쓰세요.",
+        "이미지에 없는 내용은 추가하지 마세요."
+      ].join("\n")
+    },
+    ...images.map((url) => ({ type: "image_url" as const, image_url: { url } }))
+  ];
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "gpt-4.1-mini",
+      max_tokens: 2000,
+      messages: [{ role: "user", content }]
+    })
+  });
+  if (!res.ok) throw new Error(`OpenAI vision error: ${res.status}`);
+  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+  return data.choices?.[0]?.message?.content?.trim() ?? "";
+}
+
+// ── 면접 질문 의도·힌트 생성 (RAG + nano, 저비용) ─────────────────────────
+export async function generateQuestionHint(
+  questionText: string
+): Promise<{ intent: string; hints: string[] } | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
+
+  const hits = await searchKnowledge(questionText, { limit: 2 });
+  const principles = principlesToPrompt(hits);
+
+  const prompt = [
+    `[면접 질문] ${questionText}`,
+    principles ? `\n${principles}` : "",
+    "",
+    "위 질문에 대해 다음 JSON으로만 응답하세요:",
+    '{"intent":"면접관이 이 질문으로 확인하려는 것 1문장(50자 이내)","hints":["답변 팁1(40자 이내)","답변 팁2(40자 이내)"]}'
+  ].filter(Boolean).join("\n");
+
+  try {
+    const raw = await callOpenAI(
+      "면접 코치입니다. JSON만 출력하세요.",
+      prompt,
+      "gpt-4.1-nano",
+      250
+    );
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]) as { intent?: string; hints?: string[] };
+    if (!parsed.intent) return null;
+    return { intent: parsed.intent, hints: (parsed.hints ?? []).slice(0, 3) };
+  } catch {
+    return null;
+  }
+}
+
 // ── 스토리뱅크 답변 AI 업그레이드 ─────────────────────────────────────────
 // targetIndex: undefined = 전체 업그레이드, number = 해당 인덱스만 업그레이드
 // 각 개선안에 RAG 원칙 기반 "왜 이렇게 바꿨는지" 이유를 함께 반환한다.

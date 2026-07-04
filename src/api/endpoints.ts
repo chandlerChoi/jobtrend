@@ -101,6 +101,27 @@ export function listInterviewSessions() {
   return apiFetch<{ sessions: InterviewSessionSummary[] }>("/interview/start");
 }
 
+// 채용공고 이미지(dataURL 배열) → 텍스트 추출
+export function extractJdFromImages(images: string[]) {
+  return apiFetch<{ text: string }>("/interview/start?mode=ocr", {
+    method: "POST",
+    body: JSON.stringify({ images })
+  });
+}
+
+// 면접 질문 의도·힌트 (RAG 기반)
+export interface QuestionHint {
+  intent: string;
+  hints: string[];
+}
+
+export function getQuestionHint(questionText: string) {
+  return apiFetch<{ hint: QuestionHint | null }>("/interview/start?mode=hint", {
+    method: "POST",
+    body: JSON.stringify({ questionText })
+  });
+}
+
 export interface InterviewDetailResponse {
   averageScore: number;
   overallStrengths: string[];

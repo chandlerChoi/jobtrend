@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { useInterviewSession } from "../hooks/useInterviewSession";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import ChatBubble from "../components/feature/ChatBubble";
+import { getQuestionHint } from "../api/endpoints";
+import type { QuestionHint } from "../api/endpoints";
 import type { InterviewQuestion } from "../../shared/types";
 
 type HintMode = "none" | "keywords";
@@ -33,40 +35,66 @@ function extractKeywords(snippet: string): string[] {
   return chunks.slice(0, 5);
 }
 
-interface StoryHintBoxProps {
-  hint: { slotName: string; snippet: string };
-  mode: HintMode;
-}
-
-function StoryHintBox({ hint, mode }: StoryHintBoxProps) {
+// 힌트 패널 — RAG 질문 의도·답변 팁 + (있으면) 스토리채굴 키워드
+function HintPanel({
+  questionHint,
+  hintLoading,
+  storyHint
+}: {
+  questionHint: QuestionHint | null;
+  hintLoading: boolean;
+  storyHint?: { slotName: string; snippet: string };
+}) {
   const [expanded, setExpanded] = useState(false);
+  const keywords = storyHint ? extractKeywords(storyHint.snippet) : [];
 
-  if (mode === "none") return null;
-
-  const keywords = extractKeywords(hint.snippet);
+  if (hintLoading) {
+    return (
+      <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 flex items-center gap-2">
+        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-400 border-t-transparent" />
+        <p className="text-xs text-brand-600">힌트를 준비하는 중...</p>
+      </div>
+    );
+  }
+  if (!questionHint && !storyHint) return null;
 
   return (
-    <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-brand-700">💡 스토리 키워드 — {hint.slotName}</p>
-        <button
-          onClick={() => setExpanded((e) => !e)}
-          className="text-[10px] text-brand-500 hover:underline"
-        >
-          {expanded ? "접기" : "전체 보기"}
-        </button>
-      </div>
-      {/* 키워드 칩 */}
-      <div className="flex flex-wrap gap-1.5">
-        {keywords.map((kw, i) => (
-          <span key={i} className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-700">
-            {kw}
-          </span>
-        ))}
-      </div>
-      {/* 전체 스니펫 (확장 시) */}
-      {expanded && (
-        <p className="text-xs text-gray-600 leading-relaxed border-t border-brand-100 pt-2">{hint.snippet}</p>
+    <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 space-y-2.5">
+      {questionHint && (
+        <>
+          <div>
+            <p className="text-[11px] font-bold text-brand-700 mb-0.5">🎯 질문 의도</p>
+            <p className="text-xs text-gray-700 leading-relaxed">{questionHint.intent}</p>
+          </div>
+          {questionHint.hints.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-brand-700 mb-0.5">💡 답변 힌트</p>
+              {questionHint.hints.map((h, i) => (
+                <p key={i} className="text-xs text-gray-700 leading-relaxed before:content-['·_']">{h}</p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {storyHint && keywords.length > 0 && (
+        <div className={questionHint ? "border-t border-brand-100 pt-2" : ""}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] font-bold text-brand-700">📖 내 스토리 키워드 — {storyHint.slotName}</p>
+            <button onClick={() => setExpanded((e) => !e)} className="text-[10px] text-brand-500 hover:underline">
+              {expanded ? "접기" : "전체 보기"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {keywords.map((kw, i) => (
+              <span key={i} className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+                {kw}
+              </span>
+            ))}
+          </div>
+          {expanded && (
+            <p className="text-xs text-gray-600 leading-relaxed border-t border-brand-100 pt-2 mt-2">{storyHint.snippet}</p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -83,6 +111,34 @@ export default function InterviewSessionPage() {
     useInterviewSession(sessionId, questions);
   const [answerText, setAnswerText] = useState("");
   const { listening, start, stop, supported } = useSpeechRecognition();
+
+  // 질문별 RAG 힌트 (키워드 힌트 모드에서만 요청, 질문 id별 캐시)
+  const [questionHint, setQuestionHint] = useState<QuestionHint | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const hintCache = useRef<Record<number, QuestionHint | null>>({});
+
+  useEffect(() => {
+    if (hintMode !== "keywords" || !currentQuestion || isComplete) {
+      setQuestionHint(null);
+      return;
+    }
+    const qid = currentQuestion.id;
+    if (qid in hintCache.current) {
+      setQuestionHint(hintCache.current[qid]);
+      return;
+    }
+    let cancelled = false;
+    setHintLoading(true);
+    setQuestionHint(null);
+    getQuestionHint(currentQuestion.text)
+      .then((r) => {
+        hintCache.current[qid] = r.hint;
+        if (!cancelled) setQuestionHint(r.hint);
+      })
+      .catch(() => { if (!cancelled) setQuestionHint(null); })
+      .finally(() => { if (!cancelled) setHintLoading(false); });
+    return () => { cancelled = true; };
+  }, [hintMode, currentQuestion, isComplete]);
 
   function handleSubmit() {
     if (!answerText.trim()) return;
@@ -154,11 +210,6 @@ export default function InterviewSessionPage() {
 
       {!isComplete && currentQuestion && (
         <div className="space-y-3">
-          {/* 키워드 힌트 (모드에 따라 표시) */}
-          {currentQuestion.storyHint && (
-            <StoryHintBox hint={currentQuestion.storyHint} mode={hintMode} />
-          )}
-
           <div className="relative">
             <textarea
               value={answerText}
@@ -200,6 +251,15 @@ export default function InterviewSessionPage() {
               {submitting ? "평가 중..." : "답변 제출"}
             </button>
           </div>
+
+          {/* 힌트 패널 — 키워드 힌트 모드에서만 */}
+          {hintMode === "keywords" && (
+            <HintPanel
+              questionHint={questionHint}
+              hintLoading={hintLoading}
+              storyHint={currentQuestion.storyHint}
+            />
+          )}
         </div>
       )}
 
