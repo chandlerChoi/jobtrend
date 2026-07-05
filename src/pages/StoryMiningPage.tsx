@@ -721,7 +721,7 @@ function MiningTab() {
 // ─────────────────────────────────────────────────────────────────────────────
 // 탭 2 — 자소서 분석
 // ─────────────────────────────────────────────────────────────────────────────
-function CoverLetterTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
+function CoverLetterTab({ bookmarks, onSavedVersion }: { bookmarks: RecruitmentNewsRow[]; onSavedVersion?: () => void }) {
   const [coverText, setCoverText] = useState("");
   const [jobText, setJobText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -730,6 +730,11 @@ function CoverLetterTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
   const [improving, setImproving] = useState(false);
   const [showAfter, setShowAfter] = useState(false);
   const [afterSections, setAfterSections] = useState<CoverLetterSection[]>([]);
+
+  // 개선본 → 공고별 버전 저장
+  const [saveName, setSaveName] = useState("");
+  const [savingVersion, setSavingVersion] = useState(false);
+  const [savedVersionName, setSavedVersionName] = useState<string | null>(null);
 
   async function handleAnalyze() {
     if (!coverText.trim()) return;
@@ -752,8 +757,38 @@ function CoverLetterTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
       const res = await analyzeCoverLetter({ coverLetterText: coverText, jobPostingText: jobText || undefined, followUpAnswers });
       setAfterSections(res.sections);
       setShowAfter(true);
+      setSavedVersionName(null);
+      // 기본 저장 이름: 공고 첫 줄(회사명 추정) + 날짜
+      const company = jobText.match(/\[([^\]]+)\]/)?.[1] ?? "";
+      const today = new Date().toLocaleDateString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" }).replace(/\.\s?/g, ".").replace(/\.$/, "");
+      setSaveName(company ? `${company} 자소서 개선본 (${today})` : `자소서 개선본 (${today})`);
     } finally {
       setImproving(false);
+    }
+  }
+
+  async function handleSaveVersion() {
+    if (!saveName.trim() || savingVersion || afterSections.length === 0) return;
+    setSavingVersion(true);
+    try {
+      // 개선본(없으면 원문)을 섹션 키별로 저장 — AI 면접 이력서로 바로 재사용 가능
+      const storyContent: Record<string, string> = {};
+      afterSections.forEach((s) => {
+        const text = s.improved || s.original;
+        if (text) storyContent[s.key] = text;
+      });
+      storyContent._source = "자소서 분석 개선본";
+      const company = jobText.match(/\[([^\]]+)\]/)?.[1];
+      const res = await createStoryBankVersion({
+        versionName: saveName.trim(),
+        jobPostingText: jobText || undefined,
+        companyName: company,
+        storyContent
+      });
+      setSavedVersionName(res.version.version_name);
+      onSavedVersion?.();
+    } finally {
+      setSavingVersion(false);
     }
   }
 
@@ -842,6 +877,32 @@ function CoverLetterTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
                   </div>
                 </div>
               ))}
+              {/* 개선본 저장 → 공고별 버전 (AI 면접에서 재사용) */}
+              <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 space-y-2">
+                {savedVersionName ? (
+                  <p className="text-sm text-brand-700 font-medium">
+                    ✅ 「{savedVersionName}」으로 저장됐어요. <span className="font-normal text-xs text-gray-600">공고별 버전 탭과 AI 면접의 이력서 선택에서 바로 쓸 수 있어요.</span>
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-brand-700">💾 개선본 저장하기</p>
+                    <p className="text-xs text-gray-600">공고별 버전으로 저장하면 AI 모의면접에서 이력서로 바로 불러올 수 있어요.</p>
+                    <input
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      placeholder="버전 이름 (예: 현대모비스 자소서 개선본)"
+                    />
+                    <button
+                      onClick={handleSaveVersion}
+                      disabled={!saveName.trim() || savingVersion}
+                      className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-40"
+                    >
+                      {savingVersion ? "저장 중..." : "공고별 버전으로 저장"}
+                    </button>
+                  </>
+                )}
+              </div>
               <button onClick={() => setShowAfter(false)} className="text-xs text-gray-400 underline">← 분석 결과로 돌아가기</button>
             </div>
           )}
@@ -1044,8 +1105,13 @@ function VersionsTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
                     {cat && cat !== "전체" && (
                       <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">{cat}</span>
                     )}
+                    {v.story_content._source && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">{v.story_content._source}</span>
+                    )}
                   </div>
-                  {v.company_name && <p className="text-xs text-gray-500">{v.company_name} · {new Date(v.updated_at).toLocaleDateString("ko-KR")}</p>}
+                  <p className="text-xs text-gray-500">
+                    {v.company_name ? `${v.company_name} · ` : ""}{new Date(v.updated_at).toLocaleDateString("ko-KR")} 저장
+                  </p>
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(v.id); }}
                   className="text-xs text-gray-400 hover:text-red-500 px-2 py-1 shrink-0">삭제</button>

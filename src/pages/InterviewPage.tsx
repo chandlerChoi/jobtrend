@@ -53,11 +53,13 @@ function storyCardsToResume(cards: StoryCardRow[]): string {
 }
 
 // 공고별 버전의 자소서 섹션을 이력서 텍스트로 변환
+// 표준 4섹션 우선, 그 외 키(full/other 등)도 포함 (_로 시작하는 메타키 제외)
 function versionToResume(v: StoryBankVersion): string {
-  return SECTION_ORDER
-    .map((key) => v.story_content[key])
-    .filter(Boolean)
-    .join("\n\n");
+  const standard = SECTION_ORDER.map((key) => v.story_content[key]).filter(Boolean);
+  const extras = Object.entries(v.story_content)
+    .filter(([k, val]) => !k.startsWith("_") && !(SECTION_ORDER as readonly string[]).includes(k) && val)
+    .map(([, val]) => val);
+  return [...standard, ...extras].join("\n\n");
 }
 
 // 이미지 파일 → 축소된 JPEG dataURL (Vercel 요청 크기 한도 대응)

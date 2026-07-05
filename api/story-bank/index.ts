@@ -133,20 +133,26 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
       };
 
     if (action === "create") {
-      // RAG + GPT로 섹션 초안 생성
-      const cards = await db.listStoryCards(user.id);
-      const cardSummaries = cards.map((c) => c.raw_answers.slice(0, 3).join(" | "));
-      const generatedContent = await generateVersionContent(
-        jobPostingText ?? "",
-        cardSummaries,
-        companyName ?? null
-      );
+      // storyContent가 오면 그대로 저장 (자소서 분석 개선본 저장 등),
+      // 없으면 RAG + GPT로 섹션 초안 생성
+      let content: Record<string, string>;
+      if (storyContent && Object.keys(storyContent).length > 0) {
+        content = storyContent;
+      } else {
+        const cards = await db.listStoryCards(user.id);
+        const cardSummaries = cards.map((c) => c.raw_answers.slice(0, 3).join(" | "));
+        content = await generateVersionContent(
+          jobPostingText ?? "",
+          cardSummaries,
+          companyName ?? null
+        );
+      }
       const version = await db.createStoryBankVersion({
         user_id: user.id,
         version_name: versionName ?? companyName ?? "새 버전",
         job_posting_text: jobPostingText ?? null,
         company_name: companyName ?? null,
-        story_content: generatedContent
+        story_content: content
       });
       res.status(201).json({ version });
       return;

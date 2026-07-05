@@ -245,6 +245,7 @@ export function createStoryBankVersion(payload: {
   versionName: string;
   jobPostingText?: string;
   companyName?: string;
+  storyContent?: Record<string, string>; // 제공 시 GPT 생성 없이 그대로 저장
 }) {
   return apiFetch<{ version: StoryBankVersion }>("/story-bank?mode=version", {
     method: "POST",
