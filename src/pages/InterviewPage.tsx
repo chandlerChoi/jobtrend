@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { startInterview, listBookmarks, listInterviewSessions, listStoryCards, listStoryBankVersions, extractJdFromImages } from "../api/endpoints";
+import { startInterview, listBookmarks, listInterviewSessions, listStoryCards, listStoryBankVersions } from "../api/endpoints";
+import { useJdOcr, SavedJdChips } from "../components/feature/JdOcr";
 import { ApiError } from "../api/client";
 import { useCredits } from "../context/CreditContext";
 import type { RecruitmentNewsRow, StoryCardRow, StoryBankVersion } from "../../shared/types";
@@ -62,27 +63,6 @@ function versionToResume(v: StoryBankVersion): string {
   return [...standard, ...extras].join("\n\n");
 }
 
-// 이미지 파일 → 축소된 JPEG dataURL (Vercel 요청 크기 한도 대응)
-function fileToDataUrl(file: File, maxDim = 1280): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas")); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.85));
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("image load")); };
-    img.src = objectUrl;
-  });
-}
-
 function PersonaChip({ persona, session }: { persona: string; session: InterviewSessionSummary }) {
   const labels = persona.split("|").map((p) => `${PERSONA_EMOJIS[p] ?? ""}${PERSONA_LABELS[p] ?? p}`).join(" + ");
   const score = session.averageScore;
@@ -120,51 +100,10 @@ export default function InterviewPage() {
   const [versions, setVersions] = useState<StoryBankVersion[]>([]);
   const [resumeSource, setResumeSource] = useState<ResumeSource>("manual");
 
-  // JD 이미지 OCR
-  const [jdImages, setJdImages] = useState<string[]>([]);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function addJdImages(files: File[]) {
-    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
-    if (imageFiles.length === 0) return;
-    try {
-      const dataUrls = await Promise.all(imageFiles.map((f) => fileToDataUrl(f)));
-      setJdImages((prev) => [...prev, ...dataUrls].slice(0, 5));
-    } catch {
-      setError("이미지를 불러오지 못했어요. 다른 이미지로 시도해주세요.");
-    }
-  }
-
-  function handleJdPaste(e: React.ClipboardEvent) {
-    const files = Array.from(e.clipboardData.items)
-      .filter((item) => item.type.startsWith("image/"))
-      .map((item) => item.getAsFile())
-      .filter((f): f is File => f !== null);
-    if (files.length > 0) {
-      e.preventDefault();
-      addJdImages(files);
-    }
-  }
-
-  async function handleExtractImages() {
-    if (jdImages.length === 0 || ocrLoading) return;
-    setOcrLoading(true);
-    setError(null);
-    try {
-      const res = await extractJdFromImages(jdImages);
-      if (res.text) {
-        setJd((prev) => (prev.trim() ? prev + "\n\n" + res.text : res.text));
-        setJdImages([]);
-      } else {
-        setError("이미지에서 텍스트를 읽지 못했어요. 더 선명한 이미지로 시도해주세요.");
-      }
-    } catch {
-      setError("이미지 인식 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setOcrLoading(false);
-    }
-  }
+  // JD 이미지 OCR + 내 공고 보관함 (공용 훅)
+  const jdOcr = useJdOcr({
+    onText: (text) => setJd((prev) => (prev.trim() ? prev + "\n\n" + text : text))
+  });
 
   useEffect(() => {
     listBookmarks().then((r) => setBookmarks(r.news)).catch(() => {});
@@ -339,55 +278,26 @@ export default function InterviewPage() {
           <div className="mb-1 flex items-center justify-between">
             <label className="block text-sm font-medium text-gray-700">채용공고(JD) <span className="text-red-400">*</span></label>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={jdOcr.openFilePicker}
               className="text-xs text-brand-600 hover:underline"
             >
               🖼️ 공고 이미지 추가
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                addJdImages(Array.from(e.target.files ?? []));
-                e.target.value = "";
-              }}
-            />
           </div>
           <textarea
             value={jd}
             onChange={(e) => setJd(e.target.value)}
-            onPaste={handleJdPaste}
+            onPaste={jdOcr.handlePaste}
             rows={5}
             className="w-full rounded-lg border border-gray-200 bg-white p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             placeholder="공고 텍스트를 붙여넣거나, 공고 이미지를 복사해서 여기에 붙여넣으세요. (이미지 여러 장 가능)"
           />
-          {jdImages.length > 0 && (
-            <div className="mt-2 rounded-lg border border-brand-200 bg-brand-50 p-2.5 space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {jdImages.map((img, i) => (
-                  <div key={i} className="relative">
-                    <img src={img} alt={`공고 이미지 ${i + 1}`} className="h-16 w-16 rounded-lg object-cover border border-gray-200" />
-                    <button
-                      onClick={() => setJdImages((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-gray-700 text-white text-[9px] leading-4 text-center hover:bg-red-500"
-                    >✕</button>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={handleExtractImages}
-                disabled={ocrLoading}
-                className="w-full rounded-lg bg-brand-500 py-2 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {ocrLoading
-                  ? <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" /> 이미지 읽는 중...</>
-                  : `이미지 ${jdImages.length}장에서 공고 내용 추출하기`}
-              </button>
-            </div>
-          )}
+          {jdOcr.ui}
+          <SavedJdChips
+            savedJds={jdOcr.savedJds}
+            onSelect={(sjd) => setJd(sjd.text)}
+            onRemove={jdOcr.removeSaved}
+          />
           {!showSidebar && bookmarks.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {bookmarks.slice(0, 5).map((b) => (

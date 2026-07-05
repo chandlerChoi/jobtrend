@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import ChatBubble from "../components/feature/ChatBubble";
+import { useJdOcr, SavedJdChips } from "../components/feature/JdOcr";
 import {
   startStoryMining, continueStoryMining, skipStoryMining, editStoryCard, createStoryCardDirect, upgradeStoryCard,
   getActiveStoryMiningSession, listStoryCards,
@@ -736,6 +737,11 @@ function CoverLetterTab({ bookmarks, onSavedVersion }: { bookmarks: RecruitmentN
   const [savingVersion, setSavingVersion] = useState(false);
   const [savedVersionName, setSavedVersionName] = useState<string | null>(null);
 
+  // 모집공고 이미지 OCR + 내 공고 보관함
+  const jdOcr = useJdOcr({
+    onText: (text) => setJobText((prev) => (prev.trim() ? prev + "\n\n" + text : text))
+  });
+
   async function handleAnalyze() {
     if (!coverText.trim()) return;
     setAnalyzing(true);
@@ -805,10 +811,21 @@ function CoverLetterTab({ bookmarks, onSavedVersion }: { bookmarks: RecruitmentN
           <p className="mt-1 text-right text-xs text-gray-400">{coverText.length}자</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">모집공고 (선택)</label>
-          <textarea value={jobText} onChange={(e) => setJobText(e.target.value)} rows={3}
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">모집공고 (선택)</label>
+            <button onClick={jdOcr.openFilePicker} className="text-xs text-brand-600 hover:underline">
+              🖼️ 공고 이미지 추가
+            </button>
+          </div>
+          <textarea value={jobText} onChange={(e) => setJobText(e.target.value)} onPaste={jdOcr.handlePaste} rows={3}
             className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            placeholder="모집공고를 붙여넣거나 오른쪽 저장한 공고에서 클릭하세요." />
+            placeholder="공고 텍스트 또는 공고 이미지를 붙여넣으세요. (이미지 여러 장 가능)" />
+          {jdOcr.ui}
+          <SavedJdChips
+            savedJds={jdOcr.savedJds}
+            onSelect={(sjd) => setJobText(sjd.text)}
+            onRemove={jdOcr.removeSaved}
+          />
           {bookmarks.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {bookmarks.slice(0, 5).map((b) => (
@@ -950,6 +967,11 @@ function VersionsTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
   const [editContent, setEditContent] = useState<Record<string, string>>({});
   const [filterCat, setFilterCat] = useState("전체");
 
+  // 모집공고 이미지 OCR + 내 공고 보관함
+  const jdOcr = useJdOcr({
+    onText: (text) => setNewPosting((prev) => (prev.trim() ? prev + "\n\n" + text : text))
+  });
+
   const loadVersions = useCallback(async () => {
     setLoading(true);
     try { setVersions((await listStoryBankVersions()).versions); }
@@ -1059,10 +1081,21 @@ function VersionsTab({ bookmarks }: { bookmarks: RecruitmentNewsRow[] }) {
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-600 mb-1 block">모집공고 (붙여넣으면 맞춤 초안 생성)</label>
-            <textarea value={newPosting} onChange={(e) => setNewPosting(e.target.value)} rows={3}
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs text-gray-600 block">모집공고 (붙여넣으면 맞춤 초안 생성)</label>
+              <button onClick={jdOcr.openFilePicker} className="text-[11px] text-brand-600 hover:underline">
+                🖼️ 공고 이미지 추가
+              </button>
+            </div>
+            <textarea value={newPosting} onChange={(e) => setNewPosting(e.target.value)} onPaste={jdOcr.handlePaste} rows={3}
               className="w-full rounded-lg border border-gray-200 p-2 text-xs"
-              placeholder="모집공고를 붙여넣거나 아래 저장한 공고를 클릭하세요." />
+              placeholder="공고 텍스트 또는 공고 이미지를 붙여넣으세요. (이미지 여러 장 가능)" />
+            {jdOcr.ui}
+            <SavedJdChips
+              savedJds={jdOcr.savedJds}
+              onSelect={(sjd) => setNewPosting(sjd.text)}
+              onRemove={jdOcr.removeSaved}
+            />
             {bookmarks.length > 0 && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {bookmarks.slice(0, 6).map((b) => (
