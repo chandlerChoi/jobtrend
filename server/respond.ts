@@ -23,8 +23,13 @@ export function withErrorHandling(
 
 export function requireCronSecret(req: VercelRequest): void {
   const expected = process.env.CRON_SECRET;
-  const provided = req.headers["x-vercel-cron-secret"];
-  if (expected && provided !== expected) {
+  if (!expected) return;
+  // Vercel Cron invokes with "Authorization: Bearer <CRON_SECRET>";
+  // the x-vercel-cron-secret header is kept for manual triggering.
+  const auth = req.headers["authorization"];
+  const bearer = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  const legacy = req.headers["x-vercel-cron-secret"];
+  if (bearer !== expected && legacy !== expected) {
     throw new AuthError("invalid cron secret", 401);
   }
 }
