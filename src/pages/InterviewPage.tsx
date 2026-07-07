@@ -179,7 +179,7 @@ export default function InterviewPage() {
     .join(" + ");
 
   return (
-    <div className="flex items-start gap-5">
+    <div className="flex flex-col lg:flex-row items-start gap-5">
       {/* ── 메인 폼 ── */}
       <div className="min-w-0 flex-1 max-w-xl space-y-5 animate-fadeUp">
         <div className="flex items-start justify-between gap-3">
@@ -201,7 +201,7 @@ export default function InterviewPage() {
           <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
             기관/업종별 <span className="text-gray-300 font-normal normal-case">(선택)</span>
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {INDUSTRY_PERSONAS.map((p) => {
               const selected = industryPersona === p.id;
               return (
@@ -226,7 +226,7 @@ export default function InterviewPage() {
           <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
             면접 스타일별 <span className="text-gray-300 font-normal normal-case">(선택)</span>
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {STYLE_PERSONAS.map((p) => {
               const selected = stylePersona === p.id;
               return (
@@ -385,7 +385,7 @@ export default function InterviewPage() {
       </div>
 
       {/* ── 오른쪽: 이전 면접 기록 + 북마크 ── */}
-      <div className="w-64 shrink-0 space-y-3 sticky top-4">
+      <div className="w-full lg:w-64 shrink-0 space-y-3 lg:sticky lg:top-4">
         {/* 이전 면접 기록 */}
         {pastSessions.length > 0 && (
           <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
