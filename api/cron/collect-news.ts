@@ -36,7 +36,7 @@ export default withErrorHandling(async (req: VercelRequest, res: VercelResponse)
   }
 
   try {
-    const fairs = await fetchJobFairs(1, 20);
+    const fairs = await fetchJobFairs(1, 50);
     for (const fair of fairs) {
       await db.upsertJobFair(fair);
       result.fairsUpserted++;

@@ -170,7 +170,11 @@ export const neonBackend: Db = {
 
   async listJobFairs() {
     const sql = client();
-    const rows = await sql`SELECT * FROM job_fairs ORDER BY start_date NULLS LAST`;
+    // 지난 행사는 제외하고 가까운 일정부터 (날짜 미상은 마지막)
+    const rows = await sql`
+      SELECT * FROM job_fairs
+      WHERE start_date IS NULL OR start_date >= CURRENT_DATE
+      ORDER BY start_date NULLS LAST`;
     return rows as any;
   },
 

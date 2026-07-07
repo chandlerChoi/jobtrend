@@ -110,7 +110,10 @@ export const mockBackend: Db = {
   },
 
   async listJobFairs() {
-    return [...store.jobFairs].sort((a, b) => (a.start_date ?? "").localeCompare(b.start_date ?? ""));
+    const today = new Date().toISOString().slice(0, 10);
+    return store.jobFairs
+      .filter((f) => !f.start_date || f.start_date >= today)
+      .sort((a, b) => (a.start_date ?? "9999").localeCompare(b.start_date ?? "9999"));
   },
 
   async upsertJobFair(fair) {
